@@ -23,6 +23,12 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
         showScreen('menu-screen');
         loadLevelButtons();
+        
+        // Show tutorial on first visit
+        const hasSeenTutorial = localStorage.getItem('wordguess_seen_tutorial');
+        if (!hasSeenTutorial) {
+            setTimeout(() => showTutorial(), 500);
+        }
     }
 });
 
@@ -48,10 +54,18 @@ function loadPreviewLevel() {
 
 // Screen Management
 function showScreen(screenId) {
+    console.log('showScreen called with:', screenId);
     document.querySelectorAll('.screen').forEach(screen => {
         screen.classList.remove('active');
+        console.log('Removed active from:', screen.id);
     });
-    document.getElementById(screenId).classList.add('active');
+    const targetScreen = document.getElementById(screenId);
+    if (targetScreen) {
+        targetScreen.classList.add('active');
+        console.log('Added active to:', screenId, 'Display:', window.getComputedStyle(targetScreen).display);
+    } else {
+        console.error('Screen not found:', screenId);
+    }
 }
 
 // Load level buttons in menu
@@ -232,7 +246,10 @@ function selectWord(word) {
         updateWordsRemaining();
         
         // Check win condition
-        if (checkWin()) {
+        const hasWon = checkWin();
+        console.log('Check win:', hasWon, 'Selected:', gameState.selectedWords.size, 'Required:', gameState.currentLevel.correctWords.length);
+        if (hasWon) {
+            console.log('WINNER! Showing results...');
             showResults(true);
         }
     } else {
@@ -258,7 +275,10 @@ function selectWord(word) {
         });
         
         // Check lose condition
-        if (checkLose()) {
+        const hasLost = checkLose();
+        console.log('Check lose:', hasLost, 'Hearts:', gameState.hearts);
+        if (hasLost) {
+            console.log('GAME OVER! Showing results...');
             setTimeout(() => showResults(false), 600);
         }
     }
@@ -414,6 +434,8 @@ function checkLose() {
 
 // Show results screen
 function showResults(isWin) {
+    console.log('showResults called with isWin:', isWin);
+    
     const title = document.getElementById('results-title');
     const starsDisplay = document.getElementById('stars-display');
     const hintsUsedText = document.getElementById('hints-used-text');
@@ -467,6 +489,7 @@ function showResults(isWin) {
         nextLevelBtn.style.display = 'none';
     }
     
+    // Switch to results screen
     showScreen('results-screen');
 }
 
@@ -586,6 +609,30 @@ function updateHintsNavButtons() {
     const totalPages = Math.ceil(gameState.currentLevel.hints.length / gameState.hintsPerPage);
     document.getElementById('hints-prev').disabled = gameState.hintsPage === 1;
     document.getElementById('hints-next').disabled = gameState.hintsPage === totalPages;
+}
+
+// Tutorial functions
+function showTutorial() {
+    document.getElementById('tutorial-popup').classList.add('active');
+}
+
+function closeTutorial() {
+    document.getElementById('tutorial-popup').classList.remove('active');
+    
+    // Mark as seen if checkbox is checked
+    const dontShow = document.getElementById('dont-show-tutorial');
+    if (dontShow && dontShow.checked) {
+        localStorage.setItem('wordguess_seen_tutorial', 'true');
+    }
+}
+
+function toggleTutorial() {
+    const dontShow = document.getElementById('dont-show-tutorial');
+    if (dontShow && dontShow.checked) {
+        localStorage.setItem('wordguess_seen_tutorial', 'true');
+    } else {
+        localStorage.removeItem('wordguess_seen_tutorial');
+    }
 }
 
 // Import level functionality

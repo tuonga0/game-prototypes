@@ -22,6 +22,7 @@
             
             <button class="btn btn-secondary" onclick="showEditor()">📝 Level Editor</button>
             <button class="btn btn-secondary" onclick="showImportLevel()">📥 Import Level</button>
+            <button class="btn btn-secondary" onclick="showTutorial()">❓ How to Play</button>
             <a href="../index.html" class="back-link">← Back to Demos</a>
         </div>
     </div>
@@ -106,6 +107,65 @@
                     <button class="btn btn-secondary" onclick="backToMenu()">📋 Menu</button>
                 </div>
             </div>
+        </div>
+    </div>
+
+    <!-- Tutorial Popup -->
+    <div id="tutorial-popup" class="popup-overlay">
+        <div class="popup-content tutorial-popup-content" onclick="event.stopPropagation()">
+            <h2 class="tutorial-title">🎯 How to Play</h2>
+            
+            <div class="tutorial-section">
+                <h3>📌 Goal</h3>
+                <p>Find all the <strong class="text-correct">correct answer words</strong> from the word list!</p>
+            </div>
+
+            <div class="tutorial-section">
+                <h3>💡 Hints System</h3>
+                <p>Tap hints to get clues about the words:</p>
+                <div class="tutorial-example">
+                    <div class="example-hint">
+                        <strong>Animal</strong>
+                        <div class="example-stats">
+                            <span class="text-correct">✓ 4 Correct</span>
+                            <span class="text-wrong">✗ 1 Wrong</span>
+                        </div>
+                    </div>
+                    <div class="example-explanation">
+                        → There are <strong>5 Animal words</strong> in the list<br>
+                        → <strong class="text-correct">4 are correct answers</strong><br>
+                        → <strong class="text-wrong">1 is wrong</strong>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tutorial-section">
+                <h3>🎮 Two Modes</h3>
+                <div class="tutorial-modes">
+                    <div class="mode-explain">
+                        <div class="mode-badge correct">✓ Select Correct</div>
+                        <p>Tap words you think are correct answers</p>
+                        <p class="mode-warning">⚠️ Wrong tap = lose 1 heart</p>
+                    </div>
+                    <div class="mode-explain">
+                        <div class="mode-badge wrong">✗ Mark Wrong</div>
+                        <p>Mark words you think are wrong (no penalty)</p>
+                        <p class="mode-note">💡 Marked words can't be selected</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="tutorial-section">
+                <h3>❤️ Hearts & Stars</h3>
+                <p>• You have <strong>3 hearts</strong> - lose all = game over</p>
+                <p>• Use <strong>fewer hints</strong> to get more stars ⭐</p>
+            </div>
+
+            <button class="btn btn-primary btn-large" onclick="closeTutorial()">Let's Play! 🎮</button>
+            <label class="tutorial-checkbox">
+                <input type="checkbox" id="dont-show-tutorial" onchange="toggleTutorial()">
+                <span>Don't show this again</span>
+            </label>
         </div>
     </div>
 
