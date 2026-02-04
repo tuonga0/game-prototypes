@@ -1,0 +1,25 @@
+{
+  "id": 1770190774813,
+  "name": "test",
+  "correctWords": [
+    "Fish"
+  ],
+  "wrongWords": [
+    "Dog"
+  ],
+  "hints": [
+    {
+      "text": "Animal",
+      "correctCount": 1,
+      "wrongCount": 1
+    },
+    {
+      "text": "Running",
+      "correctCount": 0,
+      "wrongCount": 1
+    }
+  ],
+  "threeStarThreshold": 5,
+  "twoStarThreshold": 8,
+  "oneStarThreshold": 12
+}

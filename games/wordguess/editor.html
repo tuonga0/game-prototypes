@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Level Editor - Word Guess</title>
+    <link rel="stylesheet" href="styles.css">
+    <style>
+        .editor-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .editor-section {
+            background: white;
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
+        }
+
+        .editor-section h2 {
+            color: #667eea;
+            margin-bottom: 1rem;
+            font-size: 1.3rem;
+        }
+
+        .input-group {
+            margin-bottom: 1rem;
+        }
+
+        .input-group label {
+            display: block;
+            margin-bottom: 0.5rem;
+            color: #666;
+            font-weight: 600;
+        }
+
+        .input-group input,
+        .input-group textarea {
+            width: 100%;
+            padding: 0.75rem;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-family: inherit;
+        }
+
+        .input-group input:focus,
+        .input-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .word-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+            padding: 0.75rem;
+            background: #f8f9fa;
+            border-radius: 8px;
+            min-height: 60px;
+        }
+
+        .word-tag {
+            background: #667eea;
+            color: white;
+            padding: 0.5rem 1rem;
+            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.95rem;
+        }
+
+        .word-tag.correct {
+            background: #4CAF50;
+        }
+
+        .word-tag.wrong {
+            background: #F44336;
+        }
+
+        .word-tag button {
+            background: rgba(255, 255, 255, 0.3);
+            border: none;
+            color: white;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 0.9rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+        }
+
+        .word-tag button:hover {
+            background: rgba(255, 255, 255, 0.5);
+        }
+
+        .hint-item {
+            background: #f8f9fa;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 1rem;
+            border: 2px solid #e9ecef;
+        }
+
+        .hint-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.75rem;
+        }
+
+        .hint-title {
+            font-weight: 600;
+            color: #333;
+        }
+
+        .hint-stats {
+            font-size: 0.9rem;
+            color: #666;
+        }
+
+        .hint-stats .correct {
+            color: #4CAF50;
+        }
+
+        .hint-stats .wrong {
+            color: #F44336;
+        }
+
+        .word-checkboxes {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 0.5rem;
+            margin-top: 0.75rem;
+        }
+
+        .checkbox-label {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem;
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            user-select: none;
+        }
+
+        .checkbox-label:hover {
+            background: #e9ecef;
+        }
+
+        .checkbox-label input[type="checkbox"] {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        .threshold-inputs {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+        }
+
+        .btn-small {
+            padding: 0.5rem 1rem;
+            font-size: 0.95rem;
+            min-height: auto;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 2rem;
+            color: #999;
+            font-style: italic;
+        }
+
+        @media (max-width: 768px) {
+            .editor-container {
+                padding: 10px;
+            }
+
+            .threshold-inputs {
+                grid-template-columns: 1fr;
+            }
+
+            .btn-group {
+                flex-direction: column;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="editor-container">
+        <h1 class="game-title">📝 Level Editor</h1>
+        
+        <!-- Level Info -->
+        <div class="editor-section">
+            <h2>Level Information</h2>
+            <div class="input-group">
+                <label for="level-name">Level Name</label>
+                <input type="text" id="level-name" placeholder="e.g., Animals & Birds">
+            </div>
+        </div>
+
+        <!-- Words -->
+        <div class="editor-section">
+            <h2>Words</h2>
+            
+            <div class="input-group">
+                <label for="correct-word-input">Add Correct Word</label>
+                <div style="display: flex; gap: 0.5rem;">
+                    <input type="text" id="correct-word-input" placeholder="Type a word and press Enter">
+                    <button class="btn btn-small" onclick="addCorrectWord()">Add</button>
+                </div>
+                <div class="word-list" id="correct-words-list">
+                    <div class="empty-state">No correct words yet</div>
+                </div>
+            </div>
+
+            <div class="input-group">
+                <label for="wrong-word-input">Add Wrong Word</label>
+                <div style="display: flex; gap: 0.5rem;">
+                    <input type="text" id="wrong-word-input" placeholder="Type a word and press Enter">
+                    <button class="btn btn-small" onclick="addWrongWord()">Add</button>
+                </div>
+                <div class="word-list" id="wrong-words-list">
+                    <div class="empty-state">No wrong words yet</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Hints -->
+        <div class="editor-section">
+            <h2>Hints</h2>
+            
+            <div class="input-group">
+                <label for="hint-text-input">Hint Text</label>
+                <input type="text" id="hint-text-input" placeholder="e.g., Animal, Bird, Mammal">
+            </div>
+
+            <div id="hint-word-selection" class="input-group" style="display: none;">
+                <label>Select words that match this hint:</label>
+                <div class="word-checkboxes" id="hint-checkboxes">
+                    <!-- Checkboxes will be generated here -->
+                </div>
+            </div>
+
+            <button class="btn btn-primary btn-small" onclick="addHint()">Add Hint</button>
+
+            <div id="hints-list" style="margin-top: 1.5rem;">
+                <div class="empty-state">No hints yet. Add words first, then create hints.</div>
+            </div>
+        </div>
+
+        <!-- Star Thresholds -->
+        <div class="editor-section">
+            <h2>Star Thresholds</h2>
+            <p style="color: #666; margin-bottom: 1rem; font-size: 0.95rem;">
+                Set the maximum number of hints needed to achieve each star rating
+            </p>
+            <div class="threshold-inputs">
+                <div class="input-group">
+                    <label for="three-star">3 Stars (Maximum hints)</label>
+                    <input type="number" id="three-star" value="5" min="1">
+                </div>
+                <div class="input-group">
+                    <label for="two-star">2 Stars (Maximum hints)</label>
+                    <input type="number" id="two-star" value="8" min="1">
+                </div>
+                <div class="input-group">
+                    <label for="one-star">1 Star (Maximum hints)</label>
+                    <input type="number" id="one-star" value="12" min="1">
+                </div>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="editor-section">
+            <h2>Actions</h2>
+            <div class="btn-group">
+                <button class="btn btn-primary" onclick="exportLevel()">💾 Export JSON</button>
+                <button class="btn btn-secondary" onclick="previewLevel()">👁️ Preview Level</button>
+                <button class="btn btn-secondary" onclick="clearEditor()">🗑️ Clear All</button>
+                <a href="index.html" class="btn btn-secondary" style="text-decoration: none; text-align: center;">← Back to Game</a>
+            </div>
+        </div>
+    </div>
+
+    <script src="levels.js"></script>
+    <script src="editor.js"></script>
+</body>
+</html>

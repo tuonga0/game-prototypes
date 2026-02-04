@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Word Guess - Athena Prototypes</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Menu Screen -->
+    <div id="menu-screen" class="screen active">
+        <div class="container">
+            <h1 class="game-title">🎯 Word Guess</h1>
+            <p class="game-subtitle">Find the correct words using hints!</p>
+            
+            <div class="level-select">
+                <h2>Select Level</h2>
+                <div id="level-buttons" class="level-buttons">
+                    <!-- Level buttons will be generated here -->
+                </div>
+            </div>
+            
+            <button class="btn btn-secondary" onclick="showEditor()">📝 Level Editor</button>
+            <button class="btn btn-secondary" onclick="showImportLevel()">📥 Import Level</button>
+            <a href="../index.html" class="back-link">← Back to Demos</a>
+        </div>
+    </div>
+
+    <!-- Game Screen -->
+    <div id="game-screen" class="screen">
+        <div class="game-header">
+            <button class="btn-icon" onclick="backToMenu()">←</button>
+            <div class="header-center">
+                <span id="level-name" class="level-name">Level 1</span>
+                <div class="hearts" id="hearts">♥♥♥</div>
+                <div class="words-remaining" id="words-remaining">4 words left</div>
+            </div>
+            <div class="star-tracker-mini">
+                <div id="current-stars-display">★★★</div>
+                <div id="hints-countdown">5 left</div>
+            </div>
+        </div>
+
+        <div class="game-content">
+            <!-- Words Carousel -->
+            <div class="carousel-section">
+                <h3>Words <span class="page-indicator" id="words-page">1/2</span></h3>
+                <div class="carousel-container">
+                    <button class="carousel-nav prev" id="words-prev" onclick="prevWordsPage()">‹</button>
+                    <div class="carousel-content" id="words-carousel">
+                        <div class="carousel-page active" id="words-page-1">
+                            <div class="words-grid" data-page="1">
+                                <!-- Words will be generated here -->
+                            </div>
+                        </div>
+                    </div>
+                    <button class="carousel-nav next" id="words-next" onclick="nextWordsPage()">›</button>
+                </div>
+            </div>
+
+            <!-- Hints Carousel -->
+            <div class="carousel-section">
+                <h3>Hints <span class="page-indicator" id="hints-page">1/2</span></h3>
+                <div class="carousel-container">
+                    <button class="carousel-nav prev" id="hints-prev" onclick="prevHintsPage()">‹</button>
+                    <div class="carousel-content" id="hints-carousel">
+                        <div class="carousel-page active" id="hints-page-1">
+                            <div class="hints-grid" data-page="1">
+                                <!-- Hints will be generated here -->
+                            </div>
+                        </div>
+                    </div>
+                    <button class="carousel-nav next" id="hints-next" onclick="nextHintsPage()">›</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Bottom Mode Toggle -->
+        <div class="bottom-nav">
+            <button id="mode-select" class="mode-btn active" onclick="setMode('select')">
+                <span class="mode-icon">✓</span>
+                <span class="mode-text">Select Correct</span>
+            </button>
+            <button id="mode-mark" class="mode-btn" onclick="setMode('mark')">
+                <span class="mode-icon">✗</span>
+                <span class="mode-text">Mark Wrong</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Results Screen -->
+    <div id="results-screen" class="screen">
+        <div class="container">
+            <div class="results-content">
+                <h1 id="results-title" class="results-title">Victory!</h1>
+                <div id="stars-display" class="stars-display">
+                    ★★★
+                </div>
+                <div class="results-stats">
+                    <p id="hints-used-text" class="stat-text">Hints Used: <strong>5</strong></p>
+                    <p id="star-message" class="stat-text">Amazing! Perfect score!</p>
+                </div>
+                <div class="results-actions">
+                    <button class="btn btn-primary" id="next-level-btn" onclick="nextLevel()">Next Level →</button>
+                    <button class="btn btn-secondary" onclick="retryLevel()">🔄 Retry</button>
+                    <button class="btn btn-secondary" onclick="backToMenu()">📋 Menu</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hint Popup -->
+    <div id="hint-popup" class="popup-overlay" onclick="closeHintPopup()">
+        <div class="popup-content hint-popup-content" onclick="event.stopPropagation()">
+            <h3 id="popup-hint-title">Hint</h3>
+            <div class="popup-stats">
+                <div class="popup-stat correct">
+                    <div class="stat-icon">✓</div>
+                    <div class="stat-number" id="popup-correct">0</div>
+                    <div class="stat-label">Correct</div>
+                </div>
+                <div class="popup-stat wrong">
+                    <div class="stat-icon">✗</div>
+                    <div class="stat-number" id="popup-wrong">0</div>
+                    <div class="stat-label">Wrong</div>
+                </div>
+            </div>
+            <button class="btn btn-primary" onclick="closeHintPopup()">Got it!</button>
+        </div>
+    </div>
+
+    <!-- Import Level Modal -->
+    <div id="import-modal" class="modal-overlay">
+        <div class="modal-content">
+            <h3>Import Level from JSON</h3>
+            <p>Paste your level JSON or upload a file:</p>
+            <textarea id="import-json" placeholder='{"id": 1, "name": "My Level", ...}'></textarea>
+            <input type="file" id="import-file" accept=".json" style="display: none;">
+            <div class="modal-actions">
+                <button class="btn btn-secondary" onclick="document.getElementById('import-file').click()">📁 Choose File</button>
+                <button class="btn btn-primary" onclick="importLevel()">Import</button>
+                <button class="btn btn-secondary" onclick="closeImportModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="levels.js"></script>
+    <script src="game.js"></script>
+</body>
+</html>
