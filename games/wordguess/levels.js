@@ -231,6 +231,107 @@ const LEVELS = [
         threeStarThreshold: 2,
         twoStarThreshold: 5,
         oneStarThreshold: 7
+    },
+    {
+        id: 5,
+        name: "Level Super Hard",
+        correctWords: ["Plane", "Key", "Fingerprint", "Virus", "Cheese","Season","Jump","Fatigue"],
+        wrongWords: ["Car", "Password", "Fortune", "Bird", "Account", "Tomato","Period","Tide","Comma","Dash","Bacteria","Beach"],
+        hints: [
+            {
+                text: "Cycle",
+                correctCount: 1,
+                wrongCount: 2
+            },
+            {
+                text: "Security",
+                correctCount: 3,
+                wrongCount: 2
+            },
+            {
+                text: "Sickness",
+                correctCount: 2,
+                wrongCount: 1
+            },
+            {
+                text: "Login",
+                correctCount: 0,
+                wrongCount: 2
+            },
+            {
+                text: "Summer",
+                correctCount: 1,
+                wrongCount: 0
+            },
+            {
+                text: "Spread",
+                correctCount: 1,
+                wrongCount: 1
+            },
+            {
+                text: "Flying",
+                correctCount: 1,
+                wrongCount: 1
+            },
+            {
+                text: "Computer",
+                correctCount: 2,
+                wrongCount: 2
+            },
+            {
+                text: "Vehicle",
+                correctCount: 1,
+                wrongCount: 1
+            },
+            {
+                text: "Food",
+                correctCount: 1,
+                wrongCount: 1
+            },
+            {
+                text: "Punctuation",
+                correctCount: 0,
+                wrongCount: 3
+            },
+            {
+                text: "Action",
+                correctCount: 1,
+                wrongCount: 1
+            },
+            {
+                text: "Wheel",
+                correctCount: 1,
+                wrongCount: 2
+            },
+            {
+                text: "Parachute",
+                correctCount: 2,
+                wrongCount: 0
+            },
+            {
+                text: "Milk",
+                correctCount: 1,
+                wrongCount: 0
+            },
+            {
+                text: "Animal",
+                correctCount: 0,
+                wrongCount: 1
+            },
+            {
+                text: "Fate",
+                correctCount: 0,
+                wrongCount: 1
+            },
+            {
+                text: "Ocean",
+                correctCount: 0,
+                wrongCount: 2
+            }
+        ],
+        threeStarThreshold: 12,
+        twoStarThreshold: 15,
+        oneStarThreshold: 17
     }
 ];
 
