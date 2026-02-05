@@ -1,8 +1,72 @@
 // Level data for Word Guess Game
 const LEVELS = [
-    {
-        id: 1,
-        name: "Animals & Birds",
+      {      id: 1,
+        name: "Level Demo",
+        correctWords: ["Father", "Yacht", "Brother", "Shark"],
+        wrongWords: ["Mother", "Goldfish", "Car"],
+        hints: [
+            {
+                text: "Family",
+                correctCount: 2,
+                wrongCount: 1
+            },
+            {
+                text: "Animal",
+                correctCount: 1,
+                wrongCount: 1
+            },
+            {
+                text: "Sibling",
+                correctCount: 1,
+                wrongCount: 0
+            },
+            {
+                text: "Predator",
+                correctCount: 1,
+                wrongCount: 0
+            },
+            {
+                text: "Parent",
+                correctCount: 1,
+                wrongCount: 1
+            },
+            {
+                text: "Vehicle",
+                correctCount: 1,
+                wrongCount: 1
+            },
+            {
+                text: "Male",
+                correctCount: 2,
+                wrongCount: 0
+            },
+            {
+                text: "Female",
+                correctCount: 0,
+                wrongCount: 1
+            },
+            {
+                text: "Fish",
+                correctCount: 1,
+                wrongCount: 1
+            },
+            {
+                text: "Ocean",
+                correctCount: 2,
+                wrongCount: 0
+            },
+            {
+                text: "Pet",
+                correctCount: 1,
+                wrongCount: 0
+            }
+        ],
+        threeStarThreshold: 5,
+        twoStarThreshold: 7,
+        oneStarThreshold: 6
+    },{
+        id: 2,
+        name: "Level 1",
         correctWords: ["Salmon", "Dog", "Eagle", "Cat"],
         wrongWords: ["Parrot", "Rose", "Car"],
         hints: [
@@ -47,13 +111,13 @@ const LEVELS = [
                 wrongCount: 1
             }
         ],
-        threeStarThreshold: 5,
-        twoStarThreshold: 8,
-        oneStarThreshold: 12
+        threeStarThreshold: 2,
+        twoStarThreshold: 5,
+        oneStarThreshold: 6
     },
     {
-        id: 2,
-        name: "Food & Fruits",
+        id: 3,
+        name: "Level 2",
         correctWords: ["Apple", "Carrot", "Banana", "Broccoli", "Orange"],
         wrongWords: ["Table", "Phone", "Book", "Shirt"],
         hints: [
@@ -73,11 +137,6 @@ const LEVELS = [
                 wrongCount: 0
             },
             {
-                text: "Sweet",
-                correctCount: 3,
-                wrongCount: 0
-            },
-            {
                 text: "Orange Color",
                 correctCount: 2,
                 wrongCount: 0
@@ -88,18 +147,8 @@ const LEVELS = [
                 wrongCount: 0
             },
             {
-                text: "Object",
-                correctCount: 0,
-                wrongCount: 4
-            },
-            {
                 text: "Grows on Tree",
                 correctCount: 3,
-                wrongCount: 0
-            },
-            {
-                text: "Round",
-                correctCount: 2,
                 wrongCount: 0
             },
             {
@@ -108,13 +157,13 @@ const LEVELS = [
                 wrongCount: 1
             }
         ],
-        threeStarThreshold: 6,
-        twoStarThreshold: 10,
-        oneStarThreshold: 15
+        threeStarThreshold: 2,
+        twoStarThreshold: 5,
+        oneStarThreshold: 7
     },
     {
-        id: 3,
-        name: "Colors & Objects",
+        id: 4,
+        name: "Level 3",
         correctWords: ["Ruby", "Strawberry", "Rose", "Cherry", "Blood", "Tomato"],
         wrongWords: ["Sky", "Grass", "Lemon", "Ocean", "Banana"],
         hints: [
@@ -179,9 +228,9 @@ const LEVELS = [
                 wrongCount: 2
             }
         ],
-        threeStarThreshold: 7,
-        twoStarThreshold: 12,
-        oneStarThreshold: 18
+        threeStarThreshold: 2,
+        twoStarThreshold: 5,
+        oneStarThreshold: 7
     }
 ];
 
