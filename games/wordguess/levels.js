@@ -57,8 +57,8 @@ const LEVELS = [
             },
             {
                 text: "Pet",
-                correctCount: 1,
-                wrongCount: 0
+                correctCount: 0,
+                wrongCount: 1
             }
         ],
         threeStarThreshold: 5,
