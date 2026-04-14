@@ -1,0 +1,7 @@
+Place all avatar image files (AVT_*.png) in this folder.
+
+The game references images as: ./avatars/AVT_X_Y.png
+matching the filenames in data/avatars.json.
+
+For GitHub Pages: commit this folder with all avatar images.
+If images are hosted on a CDN, update AVATAR_BASE_URL in js/game.js.

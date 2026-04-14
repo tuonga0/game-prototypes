@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Customs Cargo — Level Editor</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:'Nunito',sans-serif; background:#f0f4f8; color:#1e293b; }
+
+    /* ---- HEADER ---- */
+    header {
+      background: linear-gradient(135deg,#1a6b9e,#0d4f7a);
+      color:#fff; padding:16px 24px;
+      display:flex; align-items:center; justify-content:space-between;
+      box-shadow:0 2px 8px rgba(0,0,0,0.2);
+    }
+    header h1 { font-size:22px; font-weight:900; }
+    .header-actions { display:flex; gap:10px; }
+
+    /* ---- MAIN LAYOUT ---- */
+    .editor-layout { display:flex; height:calc(100vh - 60px); }
+
+    /* ---- SIDEBAR ---- */
+    .sidebar {
+      width:220px; min-width:220px;
+      background:#1e293b; color:#fff;
+      padding:16px; display:flex; flex-direction:column; gap:8px;
+      overflow-y:auto;
+    }
+    .sidebar h2 { font-size:12px; text-transform:uppercase; letter-spacing:1px; color:#94a3b8; margin:12px 0 4px; }
+    .sidebar-btn {
+      display:block; width:100%; text-align:left;
+      background:rgba(255,255,255,0.07); border:none; color:#fff;
+      padding:10px 14px; border-radius:10px; cursor:pointer; font-size:14px; font-weight:700;
+      transition:background .15s;
+    }
+    .sidebar-btn:hover { background:rgba(255,255,255,0.15); }
+    .sidebar-btn.active { background:#3b82f6; }
+
+    /* ---- MAIN CONTENT ---- */
+    .editor-main { flex:1; overflow-y:auto; padding:24px; }
+
+    /* ---- TABS ---- */
+    .tab-bar { display:flex; gap:4px; margin-bottom:20px; }
+    .tab-btn {
+      padding:10px 20px; border:none; background:#e2e8f0;
+      border-radius:10px 10px 0 0; cursor:pointer; font-weight:700; font-size:14px;
+      transition:background .15s; color:#475569;
+    }
+    .tab-btn.active { background:#fff; color:#1e293b; box-shadow:0 -2px 8px rgba(0,0,0,0.08); }
+    .tab-panel { background:#fff; border-radius:0 16px 16px 16px; padding:24px; box-shadow:0 2px 12px rgba(0,0,0,0.08); }
+    .tab-panel.hidden { display:none; }
+
+    /* ---- CONFIG CARDS ---- */
+    .config-card {
+      background:#f8fafc; border:1px solid #e2e8f0; border-radius:16px;
+      padding:20px; margin-bottom:16px;
+    }
+    .config-card h3 { font-size:16px; font-weight:800; margin-bottom:16px; color:#1e293b; }
+
+    .field-row { display:flex; align-items:center; gap:12px; margin-bottom:12px; flex-wrap:wrap; }
+    .field-row label { font-size:13px; font-weight:700; color:#475569; min-width:160px; }
+    .field-row input, .field-row select {
+      padding:8px 12px; border:2px solid #e2e8f0; border-radius:10px;
+      font-size:14px; font-family:inherit; font-weight:600; color:#1e293b;
+      background:#fff; width:160px;
+    }
+    .field-row input:focus, .field-row select:focus {
+      outline:none; border-color:#3b82f6;
+    }
+    .field-row input[type="text"] { width:260px; }
+
+    /* ---- PHASES ---- */
+    .phases-section { margin-top:16px; }
+    .phases-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; }
+    .phases-header span { font-size:13px; font-weight:700; color:#475569; }
+    .phase-row {
+      display:flex; align-items:center; gap:8px; margin-bottom:8px;
+      background:#f1f5f9; padding:8px 12px; border-radius:10px; flex-wrap:wrap;
+    }
+    .phase-row input {
+      width:110px; padding:6px 10px; border:2px solid #e2e8f0; border-radius:8px;
+      font-size:13px; font-family:inherit; font-weight:600;
+    }
+    .phase-row label { font-size:12px; color:#64748b; font-weight:600; }
+
+    /* ---- BUTTONS ---- */
+    .btn { padding:10px 20px; border-radius:99px; font-size:14px; font-weight:800; cursor:pointer; border:none; transition:all .15s; }
+    .btn:hover { transform:translateY(-1px); box-shadow:0 4px 10px rgba(0,0,0,0.15); }
+    .btn-primary { background:#3b82f6; color:#fff; }
+    .btn-success { background:#22c55e; color:#fff; }
+    .btn-danger  { background:#ef4444; color:#fff; }
+    .btn-outline { background:#fff; color:#475569; border:2px solid #e2e8f0; }
+
+    .btn-sm {
+      padding:5px 12px; border-radius:99px; font-size:12px; font-weight:700;
+      cursor:pointer; border:none; transition:all .15s;
+    }
+    .btn-add { background:#dbeafe; color:#1d4ed8; }
+    .btn-add:hover { background:#bfdbfe; }
+    .btn-load { background:#d1fae5; color:#065f46; }
+    .btn-load:hover { background:#a7f3d0; }
+    .btn-del { background:#fee2e2; color:#991b1b; }
+    .btn-del:hover { background:#fecaca; }
+
+    /* ---- SAVED LEVELS ---- */
+    #saved-levels-list { margin-top:12px; display:flex; flex-direction:column; gap:8px; }
+    .saved-level-item {
+      display:flex; align-items:center; justify-content:space-between;
+      background:#f1f5f9; padding:10px 14px; border-radius:10px;
+    }
+    .saved-level-name { font-weight:700; font-size:14px; }
+    .saved-level-actions { display:flex; gap:6px; }
+
+    /* ---- ASSIGN SECTION ---- */
+    .assign-section { margin-top:16px; }
+    .assigned-avatars { margin-top:8px; min-height:60px; }
+    .mini-avatar-grid { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; }
+    .mini-avatar {
+      width:56px; height:56px; border-radius:8px; overflow:hidden;
+      position:relative; border:2px solid #e2e8f0; background:#f1f5f9;
+    }
+    .mini-avatar img { width:100%; height:100%; object-fit:cover; }
+    .mini-remove {
+      position:absolute; top:-4px; right:-4px;
+      background:#ef4444; color:#fff; border:none; border-radius:99px;
+      width:18px; height:18px; font-size:10px; cursor:pointer;
+      display:flex; align-items:center; justify-content:center;
+      line-height:1;
+    }
+
+    .warn-box { background:#fef3c7; color:#92400e; padding:8px 12px; border-radius:8px; font-size:13px; font-weight:700; margin-top:8px; }
+    .ok-box   { background:#d1fae5; color:#065f46; padding:8px 12px; border-radius:8px; font-size:13px; font-weight:700; margin-top:8px; }
+    .empty-state { color:#94a3b8; font-size:13px; font-style:italic; padding:8px; }
+
+    /* ---- AVATAR MODAL ---- */
+    #avatar-modal {
+      position:fixed; inset:0; z-index:1000;
+      background:rgba(0,0,0,0.5); backdrop-filter:blur(4px);
+      display:flex; align-items:center; justify-content:center;
+    }
+    #avatar-modal.hidden { display:none; }
+    .modal-content {
+      background:#fff; border-radius:20px; width:min(90vw,820px);
+      max-height:90vh; display:flex; flex-direction:column;
+      box-shadow:0 16px 48px rgba(0,0,0,0.3);
+    }
+    .modal-header {
+      padding:16px 20px; border-bottom:2px solid #f1f5f9;
+      display:flex; align-items:center; justify-content:space-between;
+    }
+    .modal-header h2 { font-size:18px; font-weight:800; }
+    .modal-filters {
+      padding:12px 20px; border-bottom:1px solid #f1f5f9;
+      display:flex; gap:10px; flex-wrap:wrap; align-items:center;
+    }
+    .modal-filters input, .modal-filters select {
+      padding:8px 12px; border:2px solid #e2e8f0; border-radius:10px;
+      font-size:14px; font-family:inherit; font-weight:600;
+    }
+    .modal-filters input { flex:1; min-width:160px; }
+    #modal-avatar-grid {
+      flex:1; overflow-y:auto; padding:16px 20px;
+      display:flex; flex-wrap:wrap; gap:10px; align-content:flex-start;
+    }
+    .modal-avatar {
+      width:72px; height:72px; border-radius:10px; overflow:hidden;
+      position:relative; cursor:pointer; border:2px solid #e2e8f0;
+      transition:transform .1s, border-color .1s;
+    }
+    .modal-avatar:hover { transform:scale(1.06); border-color:#3b82f6; }
+    .modal-avatar.in-lane { border-color:#22c55e; border-width:3px; }
+    .modal-avatar.in-other { border-color:#f59e0b; opacity:0.7; }
+    .modal-avatar img { width:100%; height:100%; object-fit:cover; }
+    .modal-check {
+      position:absolute; top:2px; right:2px;
+      background:#22c55e; color:#fff; border-radius:99px;
+      width:18px; height:18px; font-size:12px;
+      display:flex; align-items:center; justify-content:center; font-weight:900;
+    }
+    .modal-other {
+      position:absolute; top:2px; right:2px;
+      background:#f59e0b; color:#fff; border-radius:99px;
+      width:14px; height:14px; font-size:8px;
+      display:flex; align-items:center; justify-content:center;
+    }
+    .modal-footer {
+      padding:12px 20px; border-top:1px solid #f1f5f9;
+      display:flex; align-items:center; justify-content:space-between;
+    }
+    #modal-count { font-size:13px; color:#94a3b8; }
+
+    /* ---- TOAST ---- */
+    .editor-toast {
+      position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
+      background:#1e293b; color:#fff; padding:12px 24px; border-radius:99px;
+      font-size:14px; font-weight:700;
+      opacity:0; pointer-events:none; transition:opacity .25s;
+      z-index:2000;
+    }
+    .editor-toast.show { opacity:1; }
+    .editor-toast.danger { background:#ef4444; }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <h1>🛃 Customs Cargo — Level Editor</h1>
+  <div class="header-actions">
+    <a href="index.html" class="btn btn-outline" style="text-decoration:none">🎮 Play</a>
+    <button class="btn btn-outline" onclick="importLevel()">📂 Import</button>
+    <button class="btn btn-success"  onclick="saveLevel()">💾 Save</button>
+    <button class="btn btn-primary"  onclick="exportLevel()">⬇️ Export JSON</button>
+  </div>
+</header>
+
+<div class="editor-layout">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <h2>Level</h2>
+    <button class="sidebar-btn" onclick="newLevel()">✨ New Level</button>
+
+    <h2>Tabs</h2>
+    <button class="sidebar-btn tab-btn active" data-tab="settings" onclick="switchTab('settings')">⚙️ Settings</button>
+    <button class="sidebar-btn tab-btn" data-tab="lanes"    onclick="switchTab('lanes')">🚢 Lanes</button>
+    <button class="sidebar-btn tab-btn" data-tab="customs"  onclick="switchTab('customs')">🛃 Customs</button>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="editor-main">
+
+    <!-- TAB: SETTINGS -->
+    <div id="tab-settings" class="tab-panel">
+      <h2 style="margin-bottom:20px;font-size:20px">⚙️ Level Settings</h2>
+
+      <div class="config-card">
+        <h3>Basic</h3>
+        <div class="field-row">
+          <label>Level Name</label>
+          <input type="text" id="level-name" placeholder="Level 1"
+                 onchange="E.level.name = this.value">
+        </div>
+        <div class="field-row">
+          <label>Number of Lanes</label>
+          <select id="lane-count" onchange="onLaneCountChange(this.value)">
+            <option value="2">2 Lanes</option>
+            <option value="3">3 Lanes</option>
+            <option value="4">4 Lanes</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="config-card">
+        <h3>Saved Levels</h3>
+        <div id="saved-levels-list"></div>
+      </div>
+    </div>
+
+    <!-- TAB: LANES -->
+    <div id="tab-lanes" class="tab-panel hidden">
+      <h2 style="margin-bottom:20px;font-size:20px">🚢 Lane Configuration</h2>
+      <div id="lanes-config"></div>
+    </div>
+
+    <!-- TAB: CUSTOMS -->
+    <div id="tab-customs" class="tab-panel hidden">
+      <h2 style="margin-bottom:20px;font-size:20px">🛃 Customs Configuration</h2>
+      <p style="color:#64748b;font-size:14px;margin-bottom:16px">
+        Assign correct avatars per lane. Only those avatars will enter the shared spawn pool.
+        Ships passing customs must carry only avatars from that lane's correct list.
+      </p>
+      <div id="customs-config"></div>
+    </div>
+
+  </main>
+</div>
+
+<!-- AVATAR ASSIGN MODAL -->
+<div id="avatar-modal" class="hidden">
+  <div class="modal-content">
+    <div class="modal-header">
+      <h2>🎭 Select Correct Avatars — <span id="modal-lane-label"></span></h2>
+      <button class="btn btn-outline" onclick="closeAvatarModal()">✕ Done</button>
+    </div>
+    <div class="modal-filters">
+      <input type="text" placeholder="Search by name or tag..." oninput="onModalSearch(this.value)">
+      <select id="modal-tag-filter" onchange="onModalTagFilter(this.value)">
+        <option value="">All tags</option>
+      </select>
+    </div>
+    <div id="modal-avatar-grid"></div>
+    <div class="modal-footer">
+      <span id="modal-count"></span>
+      <button class="btn btn-success" onclick="closeAvatarModal()">✓ Confirm Selection</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="editor-toast" id="editor-toast"></div>
+
+<!-- DATA -->
+<!-- Data loaded via script tag — works on file:// and GitHub Pages -->
+<script src="./data/avatars.js"></script>
+<script src="./data/tags.js"></script>
+<!-- editor.js reads window.AVATARS_DATA and window.AVAILABLE_TAGS_DATA -->
+<script src="./js/editor.js"></script>
+</body>
+</html>

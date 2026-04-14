@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Customs Cargo 🚢</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="./css/style.css">
+</head>
+<body>
+
+<!-- ==================== GAME ROOT ==================== -->
+<div id="game-root">
+
+  <!-- Ocean background -->
+  <div id="ocean-bg">
+    <div class="wave"></div>
+    <div class="wave"></div>
+    <div class="wave"></div>
+  </div>
+
+  <!-- HUD -->
+  <div id="hud">
+    <div id="hearts-display"></div>
+    <div id="game-title">🚢 CUSTOMS CARGO</div>
+    <div id="score-display">📦 0</div>
+  </div>
+
+  <!-- Lanes (ships rendered here) -->
+  <div id="lanes-container"></div>
+
+  <!-- Customs checkpoint bar -->
+  <div id="customs-bar">
+    <div class="customs-line"></div>
+    <div class="customs-booths" id="customs-booths"></div>
+  </div>
+
+  <!-- Toast notifications -->
+  <div id="toast-container"></div>
+
+  <!-- Game Over / Level Complete overlay -->
+  <div id="overlay" class="hidden">
+    <div class="overlay-card" id="overlay-card"></div>
+  </div>
+
+  <!-- ==================== LEVEL SELECT ==================== -->
+  <div id="level-select">
+    <h1>🚢 Customs Cargo</h1>
+    <p style="color:rgba(255,255,255,0.8);font-size:15px;text-align:center;max-width:400px">
+      Sort the cargo ships before they reach customs!<br>Drag &amp; drop cargo between ships to satisfy each checkpoint.
+    </p>
+
+    <div class="level-grid" id="level-grid">
+      <!-- filled by JS -->
+    </div>
+
+    <a href="editor.html" class="editor-link">✏️ Open Level Editor</a>
+  </div>
+
+</div>
+
+<!-- ==================== DATA & SCRIPTS ==================== -->
+<script>
+// Avatar data — loaded from JSON
+let AVATARS = [];
+
+// Built-in demo levels (before any custom levels are created)
+const BUILTIN_LEVELS = [
+  {
+    id: 'demo_1',
+    name: '🟢 Tutorial',
+    laneCount: 2,
+    lanes: [
+      { spawnInterval: 5, shipSpeed: 60, slotCount: 1, phases: [] },
+      { spawnInterval: 5, shipSpeed: 60, slotCount: 1, phases: [] },
+    ],
+    customs: [
+      {
+        laneIndex: 0,
+        correctAvatars: [],   // filled after avatars load
+        _correctTags: ['Happy'],   // used to auto-fill demo
+        displayHint: { required: ['Happy'], banned: [] },
+        phases: [{ count: 3 }],
+      },
+      {
+        laneIndex: 1,
+        correctAvatars: [],
+        _correctTags: ['Angry'],
+        displayHint: { required: ['Angry'], banned: [] },
+        phases: [{ count: 3 }],
+      },
+    ],
+  },
+  {
+    id: 'demo_2',
+    name: '🟡 Two Lanes',
+    laneCount: 2,
+    lanes: [
+      { spawnInterval: 4, shipSpeed: 55, slotCount: 2, phases: [] },
+      { spawnInterval: 4, shipSpeed: 55, slotCount: 2, phases: [] },
+    ],
+    customs: [
+      {
+        laneIndex: 0,
+        correctAvatars: [],
+        _correctTags: ['Woman'],
+        displayHint: { required: ['Woman'], banned: [] },
+        phases: [{ count: 4 }],
+      },
+      {
+        laneIndex: 1,
+        correctAvatars: [],
+        _correctTags: ['Man'],
+        displayHint: { required: ['Man'], banned: ['Old'] },
+        phases: [{ count: 4 }],
+      },
+    ],
+  },
+  {
+    id: 'demo_3',
+    name: '🔴 Three Lanes',
+    laneCount: 3,
+    lanes: [
+      { spawnInterval: 3.5, shipSpeed: 65, slotCount: 2, phases: [{ startTime: 20, spawnInterval: 2.5, shipSpeed: 80 }] },
+      { spawnInterval: 3.5, shipSpeed: 65, slotCount: 2, phases: [{ startTime: 20, spawnInterval: 2.5, shipSpeed: 80 }] },
+      { spawnInterval: 3.5, shipSpeed: 65, slotCount: 2, phases: [{ startTime: 20, spawnInterval: 2.5, shipSpeed: 80 }] },
+    ],
+    customs: [
+      {
+        laneIndex: 0,
+        correctAvatars: [],
+        _correctTags: ['Happy'],
+        displayHint: { required: ['Happy'], banned: [] },
+        phases: [{ count: 4 }, { count: 4 }],
+      },
+      {
+        laneIndex: 1,
+        correctAvatars: [],
+        _correctTags: ['Sad'],
+        displayHint: { required: ['Sad'], banned: [] },
+        phases: [{ count: 4 }],
+      },
+      {
+        laneIndex: 2,
+        correctAvatars: [],
+        _correctTags: ['Angry'],
+        displayHint: { required: ['Angry'], banned: [] },
+        phases: [{ count: 4 }],
+      },
+    ],
+  },
+];
+
+// Auto-fill demo level correctAvatars once avatars are loaded
+function autoFillDemoLevels() {
+  BUILTIN_LEVELS.forEach(level => {
+    level.customs.forEach(c => {
+      if (c._correctTags && c.correctAvatars.length === 0) {
+        const needed = c.phases.reduce((s, p) => s + p.count, 0) * 2; // 2x buffer
+        c.correctAvatars = AVATARS
+          .filter(a => c._correctTags.every(t => a.tags.includes(t)))
+          .slice(0, Math.min(needed, 12))
+          .map(a => a.id);
+      }
+    });
+  });
+}
+
+// Get all levels: builtin + saved
+function getAllLevels() {
+  const saved = getSavedLevels();
+  return [...BUILTIN_LEVELS, ...Object.values(saved)];
+}
+
+function getSavedLevels() {
+  try { return JSON.parse(localStorage.getItem('customsCargo_levels') || '{}'); }
+  catch { return {}; }
+}
+
+// Render level select grid
+function renderLevelSelect() {
+  const grid = document.getElementById('level-grid');
+  const levels = getAllLevels();
+  grid.innerHTML = levels.map(lvl => `
+    <div class="level-card" onclick="pickLevel('${lvl.id}')">
+      <div class="level-name">${lvl.name}</div>
+      <div class="level-meta">${lvl.laneCount} lanes</div>
+    </div>`).join('');
+}
+
+function pickLevel(id) {
+  const lvl = getAllLevels().find(l => l.id === id);
+  if (!lvl) return;
+  document.getElementById('level-select').classList.add('hidden');
+  startLevel(lvl);
+}
+</script>
+
+<!-- Data loaded via script tag — works on file:// and GitHub Pages -->
+<script src="./data/avatars.js"></script>
+<script>
+  // Assign from global injected by script tag
+  if (window.AVATARS_DATA) {
+    AVATARS = window.AVATARS_DATA;
+  }
+  autoFillDemoLevels();
+  renderLevelSelect();
+</script>
+
+<script src="./js/game.js"></script>
+
+</body>
+</html>
