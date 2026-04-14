@@ -167,10 +167,16 @@ function autoFillDemoLevels() {
   });
 }
 
-// Get all levels: builtin + saved
+// Get all levels: published (from data/levels/*.js) + local saved (localStorage)
 function getAllLevels() {
-  const saved = getSavedLevels();
-  return [...BUILTIN_LEVELS, ...Object.values(saved)];
+  // window.LEVEL_DATA is populated by each level JS file
+  const published = Object.values(window.LEVEL_DATA || {});
+  const saved     = getSavedLevels();
+  const publishedIds = new Set(published.map(l => l.id));
+  const localOnly    = Object.values(saved).filter(l => !publishedIds.has(l.id));
+  // Fall back to demo levels if no published levels yet
+  const base = published.length > 0 ? published : BUILTIN_LEVELS;
+  return [...base, ...localOnly];
 }
 
 function getSavedLevels() {
@@ -197,15 +203,30 @@ function pickLevel(id) {
 }
 </script>
 
-<!-- Data loaded via script tag — works on file:// and GitHub Pages -->
+<!-- Level data: manifest lists which files to load, each file populates window.LEVEL_DATA -->
+<script>window.LEVEL_DATA = {};</script>
+<script src="./data/levels/manifest.js"></script>
+<script>
+  // Dynamically load each level JS file listed in manifest
+  (function() {
+    const manifest = window.LEVEL_MANIFEST || [];
+    manifest.forEach(function(name) {
+      const s = document.createElement('script');
+      s.src = './data/levels/' + name + '.js';
+      document.head.appendChild(s);
+    });
+  })();
+</script>
+
+<!-- Avatar data -->
 <script src="./data/avatars.js"></script>
 <script>
-  // Assign from global injected by script tag
-  if (window.AVATARS_DATA) {
-    AVATARS = window.AVATARS_DATA;
-  }
-  autoFillDemoLevels();
-  renderLevelSelect();
+  if (window.AVATARS_DATA) AVATARS = window.AVATARS_DATA;
+  // Wait for all level scripts to load before rendering
+  window.addEventListener('load', function() {
+    autoFillDemoLevels();
+    renderLevelSelect();
+  });
 </script>
 
 <script src="./js/game.js"></script>

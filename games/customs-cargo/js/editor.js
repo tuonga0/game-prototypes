@@ -90,6 +90,125 @@ function exportLevel() {
   URL.revokeObjectURL(url);
 }
 
+// ============================================================
+// PUBLISH TO GITHUB PAGES
+// ============================================================
+
+// Get/set the list of levels to be published (stored in localStorage as staging area)
+function getPublishQueue() {
+  try { return JSON.parse(localStorage.getItem('customsCargo_publishQueue') || '[]'); }
+  catch { return []; }
+}
+
+function setPublishQueue(arr) {
+  localStorage.setItem('customsCargo_publishQueue', JSON.stringify(arr));
+}
+
+function slugify(str) {
+  return (str || 'level').toLowerCase().trim()
+    .replace(/[^\w\s-]/g, '').replace(/[\s_-]+/g, '_') || 'level';
+}
+
+function openPublishModal() {
+  let queue = getPublishQueue();
+  if (queue.length === 0) {
+    const saved = getSavedLevels();
+    queue = Object.values(saved);
+    setPublishQueue(queue);
+  }
+  renderPublishList();
+  document.getElementById('publish-modal').classList.remove('hidden');
+}
+
+function addCurrentToPublish() {
+  if (!E.level) return;
+  saveLevel();
+  const queue = getPublishQueue();
+  const idx   = queue.findIndex(l => l.id === E.level.id);
+  if (idx >= 0) queue[idx] = E.level;
+  else queue.push(E.level);
+  setPublishQueue(queue);
+  renderPublishList();
+  showEditorToast('Level added!');
+}
+
+function removeFromPublish(id) {
+  setPublishQueue(getPublishQueue().filter(l => l.id !== id));
+  renderPublishList();
+}
+
+function renderPublishList() {
+  const list  = document.getElementById('publish-level-list');
+  const queue = getPublishQueue();
+  if (!list) return;
+  if (queue.length === 0) {
+    list.innerHTML = '<div style="color:#94a3b8;font-size:13px;font-style:italic">Chưa có level nào. Bấm "+ Thêm level hiện tại"</div>';
+    return;
+  }
+  list.innerHTML = queue.map(lvl => {
+    const varName = slugify(lvl.id || lvl.name);
+    return `
+    <div style="display:flex;align-items:center;justify-content:space-between;background:#fff;padding:8px 12px;border-radius:8px;border:1px solid #e2e8f0;gap:8px;">
+      <div>
+        <div style="font-weight:700;font-size:14px">${lvl.name || lvl.id}</div>
+        <div style="font-size:11px;color:#94a3b8;font-family:monospace">data/levels/${varName}.js</div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <button class="btn-sm btn-load" onclick="downloadSingleLevel('${lvl.id}')">⬇️</button>
+        <button class="btn-sm btn-del"  onclick="removeFromPublish('${lvl.id}')">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// Download một file .js cho từng level riêng lẻ
+function downloadSingleLevel(id) {
+  const queue   = getPublishQueue();
+  const lvl     = queue.find(l => l.id === id);
+  if (!lvl) return;
+  const varName = slugify(lvl.id || lvl.name);
+  const content =
+    `// Level: ${lvl.name || id}\n` +
+    `window.LEVEL_DATA = window.LEVEL_DATA || {};\n` +
+    `window.LEVEL_DATA['${varName}'] = ` +
+    JSON.stringify(lvl, null, 2) + ';\n';
+  downloadText(content, `${varName}.js`, 'application/javascript');
+}
+
+// Download manifest.js tổng hợp từ tất cả level trong queue
+function downloadLevelsJs() {
+  const queue = getPublishQueue();
+  if (queue.length === 0) {
+    showEditorToast('Không có level nào!', 'danger');
+    return;
+  }
+  const varNames = queue.map(l => slugify(l.id || l.name));
+  const content =
+    `// CUSTOMS CARGO — Level Manifest (auto-generated)\n` +
+    `window.LEVEL_MANIFEST = [\n` +
+    varNames.map(v => `  '${v}',`).join('\n') +
+    `\n];\n`;
+  downloadText(content, 'manifest.js', 'application/javascript');
+  showEditorToast('manifest.js downloaded!');
+}
+
+// Download tất cả level + manifest cùng lúc
+function downloadAll() {
+  const queue = getPublishQueue();
+  if (queue.length === 0) { showEditorToast('Không có level nào!', 'danger'); return; }
+  queue.forEach(lvl => downloadSingleLevel(lvl.id));
+  setTimeout(() => downloadLevelsJs(), 300);
+  showEditorToast(`Đã download ${queue.length} level files + manifest.js`);
+}
+
+function downloadText(content, filename, type) {
+  const blob = new Blob([content], { type });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = filename; a.click();
+  URL.revokeObjectURL(url);
+}
+
 function importLevel() {
   const input = document.createElement('input');
   input.type  = 'file';
