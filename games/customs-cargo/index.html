@@ -58,6 +58,35 @@
     <a href="editor.html" class="editor-link">✏️ Open Level Editor</a>
   </div>
 
+  <!-- ==================== FTUE POPUP ==================== -->
+  <div id="ftue-overlay" class="hidden">
+    <div class="ftue-card">
+      <h2>🚢 Customs Cargo</h2>
+      <p class="ftue-subtitle">Sort the cargo before it reaches the checkpoint!</p>
+      <div class="ftue-rules">
+        <div class="ftue-rule">
+          <span class="rule-icon">↕️</span>
+          <div class="rule-text">Ships carry cargo and move <strong>downward</strong> toward the customs checkpoint at the bottom.</div>
+        </div>
+        <div class="ftue-rule">
+          <span class="rule-icon">🛃</span>
+          <div class="rule-text">Each lane has its own <strong>customs rule</strong>. Only the right cargo can pass — wrong cargo gets rejected!</div>
+        </div>
+        <div class="ftue-rule">
+          <span class="rule-icon">✋</span>
+          <div class="rule-text"><strong>Drag &amp; drop</strong> cargo between ships to sort it into the correct lanes before they reach customs.</div>
+        </div>
+        <div class="ftue-rule">
+          <span class="rule-icon">❤️</span>
+          <div class="rule-text">A rejected ship <strong>costs 1 life</strong> and its cargo returns to the pool. Lose 3 lives — game over!</div>
+        </div>
+      </div>
+      <button class="btn btn-primary" style="width:100%;font-size:16px;padding:14px" onclick="closeFTUE()">
+        Let's Go! 🚀
+      </button>
+    </div>
+  </div>
+
 </div>
 
 <!-- ==================== DATA & SCRIPTS ==================== -->
@@ -199,7 +228,22 @@ function pickLevel(id) {
   const lvl = getAllLevels().find(l => l.id === id);
   if (!lvl) return;
   document.getElementById('level-select').classList.add('hidden');
-  startLevel(lvl);
+  // Show FTUE on first play ever
+  if (!localStorage.getItem('customsCargo_ftue_seen')) {
+    G._pendingLevel = lvl;
+    document.getElementById('ftue-overlay').classList.remove('hidden');
+  } else {
+    startLevel(lvl);
+  }
+}
+
+function closeFTUE() {
+  localStorage.setItem('customsCargo_ftue_seen', '1');
+  document.getElementById('ftue-overlay').classList.add('hidden');
+  if (G._pendingLevel) {
+    startLevel(G._pendingLevel);
+    G._pendingLevel = null;
+  }
 }
 </script>
 

@@ -165,19 +165,29 @@ function updateSpawns(dt) {
 }
 
 function spawnShip(laneIdx) {
-  const lCfg    = G.level.lanes[laneIdx];
-  const slotCnt = lCfg.slotCount || 1;
-  const slots   = [];
+  const lCfg      = G.level.lanes[laneIdx];
+  const slotCnt   = lCfg.slotCount || 1;
+  const correctSet = new Set(G.level.customs[laneIdx]?.correctAvatars || []);
+  const slots     = [];
+
   for (let s = 0; s < slotCnt; s++) {
-    slots.push(pullFromPool()); // null if pool empty
+    let avt = pullFromPool();
+    // 50% re-roll if avatar is a correct answer for THIS lane
+    // (makes it harder to get lucky, player has to sort actively)
+    if (avt && correctSet.has(avt.id) && Math.random() < 0.5) {
+      returnToPool(avt);
+      avt = pullFromPool(); // accept result regardless (avoid infinite loop)
+    }
+    slots.push(avt);
   }
+
   const ship = {
-    id:        G._shipId++,
+    id:       G._shipId++,
     laneIdx,
-    slots,       // array of avatar|null
-    y:          -getShipHeight(slotCnt), // start above viewport
-    checked:    false,
-    rejected:   false,
+    slots,
+    y:        -getShipHeight(slotCnt),
+    checked:  false,
+    rejected: false,
   };
   G.lanes[laneIdx].ships.push(ship);
   createShipDOM(ship, laneIdx);
@@ -187,7 +197,9 @@ function spawnShip(laneIdx) {
 // SHIP MOVEMENT
 // ============================================================
 function getCustomsY() {
-  return (window.innerHeight - 56) * 0.7; // 70% down below HUD
+  // 5% margin from bottom edge of screen
+  const gameH = window.innerHeight - 56;
+  return gameH - window.innerHeight * 0.05;
 }
 
 function getShipHeight(slotCnt) {
@@ -258,9 +270,9 @@ function evaluateShip(ship, laneIdx) {
     customsState.count += avatarsOnShip.length;
     G.score += avatarsOnShip.length;
     renderHUD();
+    showCheckmark(ship); // ✅ green checkmark animation
 
     if (customsState.count >= phase.count) {
-      // Advance to next phase
       const nextPhase = customsState.phaseIdx + 1;
       if (nextPhase >= G.level.customs[laneIdx].phases.length) {
         customsState.done = true;
@@ -276,24 +288,41 @@ function evaluateShip(ship, laneIdx) {
       renderCustoms();
     }
   } else {
-    // Reject
     rejectShip(ship, laneIdx);
   }
 }
 
 function rejectShip(ship, laneIdx) {
-  // Return all cargo to pool
-  ship.slots.forEach(avt => returnToPool(avt));
-  ship.slots = ship.slots.map(() => null);
+  // Animate cargo flying upward first
+  ship.slots.forEach((avt, si) => {
+    if (!avt) return;
+    const card = document.getElementById('avt-' + avt._instanceId);
+    if (card) card.classList.add('flying-up');
+  });
 
-  // Update ship DOM to show empty
-  updateShipSlotDOM(ship);
+  // After animation: return cargo to pool, lose life
+  setTimeout(() => {
+    ship.slots.forEach(avt => returnToPool(avt));
+    ship.slots = ship.slots.map(() => null);
+    updateShipSlotDOM(ship);
+    loseLife();
+    markShipRejected(ship);
+  }, 420);
+}
 
-  // Lose a life
-  loseLife();
-
-  // Visual feedback
-  markShipRejected(ship);
+function showCheckmark(ship) {
+  const el = document.getElementById('ship-' + ship.id);
+  if (!el) return;
+  const check = document.createElement('div');
+  check.className = 'ship-checkmark';
+  check.textContent = '✅';
+  // position relative to ship-body
+  const body = el.querySelector('.ship-body');
+  if (body) {
+    body.style.position = 'relative';
+    body.appendChild(check);
+    setTimeout(() => check.remove(), 1200);
+  }
 }
 
 function updateShipHighlights() {
