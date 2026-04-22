@@ -1,9 +1,7 @@
-// =====================================================================
-// CUSTOMS CARGO — Level Manifest
-// Thêm tên file level vào array này mỗi khi publish level mới.
-// File level phải nằm trong cùng thư mục data/levels/
-// =====================================================================
+// CARGO SORT — Level Manifest
 window.LEVEL_MANIFEST = [
-  // Ví dụ: 'level_tutorial', 'level_forest', 'level_hard'
-  // (không cần đuôi .js)
+  'level_1776847727257',
+  'level_1776848540520',
+  'level_1776849732274',
+  'level_1776850196050',
 ];
