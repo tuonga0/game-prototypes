@@ -1,113 +1,176 @@
 // =====================================================================
-// CUSTOMS CARGO — Game Engine
+// CARGO SORT — Game Engine
 // =====================================================================
 
-const AVATAR_BASE_URL = './avatars/'; // Change to your CDN / asset path
+const AVATAR_BASE_URL = './avatars/';
 
 // ============================================================
 // STATE
 // ============================================================
 const G = {
   level: null,
-  lives: 3,
   score: 0,
-  elapsed: 0,           // seconds since level start
+  timeLeft: 0,       // seconds remaining
+  elapsed: 0,
   running: false,
   paused: false,
   lastTs: null,
+  _shipId: 0,
 
-  // per-lane state
-  lanes: [],            // [{ ships: [], spawnTimer, phaseIdx, speed, interval }]
+  // Customs pool state
+  customsQueue: [],  // requirements not yet assigned to a lane
+  laneReqs: [],      // [laneIdx] = { req, progress } | null
+  clearedReqs: 0,    // total reqs cleared this level
+  totalReqs: 0,
 
-  // customs state
-  customs: [],          // [{ phaseIdx, count, done }]
+  // Per-lane ship/spawn state
+  lanes: [],         // [{ ships, spawnTimer, speed, interval, phaseIdx, cfg }]
 
-  // drag state
+  // Shared avatar pool (only from active requirements)
+  pool: [],
+
+  // Duplicate-spawn prevention
+  inPlayIds:    new Set(),   // avatar IDs currently on any ship (not yet evaluated)
+  completedIds: new Set(),   // avatar IDs that passed customs (never respawn)
+
+  // Wave category throttle (max 3 per req-category per wave)
+  waveCategoryCounts: {},    // reqId → count of avatars spawned this wave
+  waveTimer: 0,              // counts down; resets to max lane interval each wave
+
+  // Drag state
   drag: {
     active: false,
-    avatarId: null,     // id of avatar being dragged
+    srcSlot: null,     // { shipId, slotIdx }
     srcShipIdx: null,
-    srcSlotIdx: null,
     ghostEl: null,
-    overShipIdx: null,
+    overShipId: null,
     overSlotIdx: null,
   },
 
-  // ship id counter
-  _shipId: 0,
-
-  // pool: array of avatar objects (shared)
-  pool: [],
+  _pendingLevel: null,
 };
 
 // ============================================================
-// MAIN ENTRY
+// ENTRY POINT
 // ============================================================
 function startLevel(levelData) {
-  G.level   = levelData;
-  G.lives   = 3;
-  G.score   = 0;
-  G.elapsed = 0;
-  G.running = false;
-  G.lastTs  = null;
-  G._shipId = 0;
+  G.level      = levelData;
+  G.score      = 0;
+  G.elapsed    = 0;
+  G.timeLeft   = levelData.timeLimit || 120;
+  G.running    = false;
+  G.lastTs     = null;
+  G._shipId    = 0;
+  G.clearedReqs        = 0;
+  G.pool               = [];
+  G.inPlayIds          = new Set();
+  G.completedIds       = new Set();
+  G.waveCategoryCounts = {};
+  G.waveTimer          = 0;   // will be set after lanes init
 
-  // Build shared pool (flatten all correctAvatars from all customs lanes)
-  G.pool = buildPool(levelData);
+  // Build customs queue from pool (shuffle for variety)
+  const pool = shuffle([...(levelData.customsPool || [])]);
+  G.totalReqs = pool.length;
+
+  // Assign first N requirements to lanes (N = laneCount)
+  const N = levelData.laneCount;
+  G.laneReqs = [];
+  for (let i = 0; i < N; i++) {
+    const req = pool.shift() || null;
+    G.laneReqs.push(req ? { req, progress: 0 } : null);
+    if (req) refillPoolFromReq(req);
+  }
+  G.customsQueue = pool;
 
   // Init lane states
-  G.lanes = levelData.lanes.map((lCfg, i) => {
-    const phase0 = lCfg.phases && lCfg.phases.length ? lCfg.phases[0] : null;
+  G.lanes = levelData.lanes.map((cfg, i) => {
+    const ph = cfg.phases && cfg.phases.length ? cfg.phases[0] : null;
     return {
-      ships:        [],
-      spawnTimer:   0,
-      phaseIdx:     0,
-      speed:        phase0 ? phase0.shipSpeed    : lCfg.shipSpeed,
-      interval:     phase0 ? phase0.spawnInterval: lCfg.spawnInterval,
-      cfg:          lCfg,
+      ships:       [],
+      spawnTimer:  i * 0.6,
+      phaseIdx:    0,
+      speed:       ph ? ph.shipSpeed     : cfg.shipSpeed,
+      interval:    ph ? ph.spawnInterval : cfg.spawnInterval,
+      cfg,
     };
   });
 
-  // Init customs states
-  G.customs = levelData.customs.map(c => ({
-    phaseIdx: 0,
-    count:    0,
-    done:     false,
-    cfg:      c,
-  }));
+  // Wave timer starts at the largest spawn interval across all lanes
+  G.waveTimer = getMaxSpawnInterval();
 
   buildDOM();
   renderHUD();
-  renderCustoms();
+  renderCustomsBooths();
 
   G.running = true;
   requestAnimationFrame(gameLoop);
 }
 
 // ============================================================
-// POOL
+// POOL MANAGEMENT
 // ============================================================
-function buildPool(levelData) {
-  const pool = [];
-  levelData.customs.forEach(c => {
-    (c.correctAvatars || []).forEach(id => {
-      const avt = AVATARS.find(a => a.id === id);
-      if (avt) pool.push({ ...avt, _instanceId: id + '_' + Math.random().toString(36).slice(2) });
+function refillPoolFromReq(req) {
+  // Add enough instances to fill the requirement (2× buffer)
+  const avatars = req.correctAvatars || [];
+  if (!avatars.length) return;
+  const needed = (req.count || 6) * 2;
+  for (let i = 0; i < needed; i++) {
+    const avt = AVATARS.find(a => a.id === avatars[i % avatars.length]);
+    if (avt) G.pool.push({
+      ...avt,
+      _instanceId: avt.id + '_' + Math.random().toString(36).slice(2),
+      _reqId: req.id,   // track which requirement this avatar belongs to
     });
-  });
-  return shuffle(pool);
+  }
+  G.pool = shuffle(G.pool);
 }
 
+const WAVE_CATEGORY_LIMIT = 3;
+
 function pullFromPool() {
-  if (G.pool.length === 0) return null;
-  return G.pool.splice(0, 1)[0];
+  // Skip avatars:
+  //  1. Already on a ship or completed (no duplicates)
+  //  2. Whose req-category already hit the wave limit (max 3 per category per wave)
+  const idx = G.pool.findIndex(a => {
+    if (G.inPlayIds.has(a.id) || G.completedIds.has(a.id)) return false;
+    const catCount = G.waveCategoryCounts[a._reqId] || 0;
+    return catCount < WAVE_CATEGORY_LIMIT;
+  });
+  if (idx === -1) return null;
+  const avt = G.pool.splice(idx, 1)[0];
+  G.inPlayIds.add(avt.id);
+  // Increment this category's wave count
+  G.waveCategoryCounts[avt._reqId] = (G.waveCategoryCounts[avt._reqId] || 0) + 1;
+  return avt;
 }
 
 function returnToPool(avatar) {
   if (!avatar) return;
-  // re-generate instanceId so it counts as a "new" spawn
+  G.inPlayIds.delete(avatar.id);  // no longer on a ship
   G.pool.push({ ...avatar, _instanceId: avatar.id + '_' + Math.random().toString(36).slice(2) });
   G.pool = shuffle(G.pool);
+}
+
+// Get active correct avatar IDs for a given lane
+function getLaneCorrectSet(laneIdx) {
+  const lr = G.laneReqs[laneIdx];
+  return lr ? new Set(lr.req.correctAvatars || []) : new Set();
+}
+
+// ============================================================
+// WAVE TIMER — resets category counts every maxInterval seconds
+// ============================================================
+function getMaxSpawnInterval() {
+  if (!G.lanes || !G.lanes.length) return 4;
+  return Math.max(...G.lanes.map(l => l.interval));
+}
+
+function updateWave(dt) {
+  G.waveTimer -= dt;
+  if (G.waveTimer <= 0) {
+    G.waveCategoryCounts = {};              // new wave: clear per-category counts
+    G.waveTimer = getMaxSpawnInterval();    // reset to current max interval
+  }
 }
 
 // ============================================================
@@ -115,29 +178,34 @@ function returnToPool(avatar) {
 // ============================================================
 function gameLoop(ts) {
   if (!G.running) return;
-  if (G.paused)   { requestAnimationFrame(gameLoop); return; }
+  if (G.paused) { requestAnimationFrame(gameLoop); return; }
 
   const dt = G.lastTs ? Math.min((ts - G.lastTs) / 1000, 0.1) : 0;
   G.lastTs  = ts;
   G.elapsed += dt;
 
+  // Countdown
+  G.timeLeft = Math.max(0, G.timeLeft - dt);
+  if (G.timeLeft <= 0) { endGame(false); return; }
+
   updateLanePhases();
+  updateWave(dt);
   updateSpawns(dt);
   updateShipMovement(dt);
   updateCustomsCheck();
   renderShips();
+  renderTimerHUD();
 
   requestAnimationFrame(gameLoop);
 }
 
 // ============================================================
-// LANE PHASES (speed / interval changes over time)
+// LANE PHASES
 // ============================================================
 function updateLanePhases() {
-  G.lanes.forEach((lane, i) => {
+  G.lanes.forEach(lane => {
     const phases = lane.cfg.phases;
-    if (!phases || phases.length === 0) return;
-    // advance phase index based on elapsed time
+    if (!phases || !phases.length) return;
     let newIdx = 0;
     for (let p = 0; p < phases.length; p++) {
       if (G.elapsed >= phases[p].startTime) newIdx = p;
@@ -151,11 +219,10 @@ function updateLanePhases() {
 }
 
 // ============================================================
-// SPAWNING
+// SPAWNING — only spawn avatars relevant to active reqs
 // ============================================================
 function updateSpawns(dt) {
   G.lanes.forEach((lane, laneIdx) => {
-    if (lane.cfg.paused) return;
     lane.spawnTimer -= dt;
     if (lane.spawnTimer <= 0) {
       lane.spawnTimer = lane.interval;
@@ -167,16 +234,15 @@ function updateSpawns(dt) {
 function spawnShip(laneIdx) {
   const lCfg      = G.level.lanes[laneIdx];
   const slotCnt   = lCfg.slotCount || 1;
-  const correctSet = new Set(G.level.customs[laneIdx]?.correctAvatars || []);
+  const correctSet = getLaneCorrectSet(laneIdx);
   const slots     = [];
 
   for (let s = 0; s < slotCnt; s++) {
     let avt = pullFromPool();
-    // 50% re-roll if avatar is a correct answer for THIS lane
-    // (makes it harder to get lucky, player has to sort actively)
+    // 50% re-roll if this avatar belongs to this lane's correct set
     if (avt && correctSet.has(avt.id) && Math.random() < 0.5) {
       returnToPool(avt);
-      avt = pullFromPool(); // accept result regardless (avoid infinite loop)
+      avt = pullFromPool();
     }
     slots.push(avt);
   }
@@ -187,188 +253,245 @@ function spawnShip(laneIdx) {
     slots,
     y:        -getShipHeight(slotCnt),
     checked:  false,
-    rejected: false,
   };
   G.lanes[laneIdx].ships.push(ship);
   createShipDOM(ship, laneIdx);
 }
 
 // ============================================================
-// SHIP MOVEMENT
+// MOVEMENT
 // ============================================================
 function getCustomsY() {
-  // 5% margin from bottom edge of screen
   const gameH = window.innerHeight - 56;
   return gameH - window.innerHeight * 0.05;
 }
 
 function getShipHeight(slotCnt) {
-  return 28 + slotCnt * 94; // bow(16) + stern(12) + slots*94
+  return 28 + slotCnt * 92; // bow(16) + stern(12) + slots
 }
 
 function updateShipMovement(dt) {
   G.lanes.forEach((lane, laneIdx) => {
-    lane.ships.forEach(ship => {
-      ship.y += lane.speed * 60 * dt;
-    });
-
-    // Remove ships that have left the screen
+    lane.ships.forEach(ship => { ship.y += lane.speed * dt; });
     lane.ships = lane.ships.filter(ship => {
-      if (ship.y > window.innerHeight - 56 + 50) {
-        removeShipDOM(ship);
-        return false;
-      }
+      if (ship.y > window.innerHeight + 50) { removeShipDOM(ship); return false; }
       return true;
     });
   });
 }
 
 // ============================================================
-// CUSTOMS CHECK
+// CUSTOMS EVALUATION
 // ============================================================
 function updateCustomsCheck() {
-  const customsY = getCustomsY();
-
+  const cy = getCustomsY();
   G.lanes.forEach((lane, laneIdx) => {
     lane.ships.forEach(ship => {
       if (ship.checked) return;
-
-      // Ship crosses customs line when its bottom reaches customsY
-      const shipHeight = getShipHeight(ship.slots.length);
-      const shipBottom = ship.y + shipHeight;
-
-      if (ship.y + shipHeight * 0.5 >= customsY) {
+      const sh = getShipHeight(ship.slots.length);
+      if (ship.y + sh * 0.5 >= cy) {
         ship.checked = true;
         evaluateShip(ship, laneIdx);
       }
     });
   });
-
-  // Realtime highlight (valid/invalid) before crossing
   updateShipHighlights();
 }
 
 function evaluateShip(ship, laneIdx) {
-  const customsState = G.customs[laneIdx];
-  if (!customsState || customsState.done) return;
-
-  const correctSet = new Set(G.level.customs[laneIdx].correctAvatars || []);
+  const lr = G.laneReqs[laneIdx];
   const avatarsOnShip = ship.slots.filter(Boolean);
 
-  // Empty ship fails if customs has active requirement
-  if (avatarsOnShip.length === 0) {
-    rejectShip(ship, laneIdx);
-    return;
-  }
+  // No active req for this lane → ship passes freely
+  if (!lr) return;
 
-  // All avatars must be in correctAvatars for this lane
-  const allCorrect = avatarsOnShip.every(a => correctSet.has(a.id));
+  const correctSet = new Set(lr.req.correctAvatars || []);
+  const allCorrect = avatarsOnShip.length > 0 && avatarsOnShip.every(a => correctSet.has(a.id));
 
   if (allCorrect) {
-    // Count items towards customs progress
-    const phase = G.level.customs[laneIdx].phases[customsState.phaseIdx];
-    customsState.count += avatarsOnShip.length;
-    G.score += avatarsOnShip.length;
-    renderHUD();
-    showCheckmark(ship); // ✅ green checkmark animation
+    // Mark delivered avatars as completed — they will never spawn again
+    avatarsOnShip.forEach(a => {
+      G.completedIds.add(a.id);
+      G.inPlayIds.delete(a.id);
+    });
 
-    if (customsState.count >= phase.count) {
-      const nextPhase = customsState.phaseIdx + 1;
-      if (nextPhase >= G.level.customs[laneIdx].phases.length) {
-        customsState.done = true;
-        showToast(`Lane ${laneIdx + 1} cleared! ✅`, 'success');
-        checkLevelComplete();
-      } else {
-        customsState.phaseIdx = nextPhase;
-        customsState.count = 0;
-        showToast(`New requirement for Lane ${laneIdx + 1}!`, 'success');
-      }
-      renderCustoms();
+    lr.progress += avatarsOnShip.length;
+    G.score     += avatarsOnShip.length;
+    showCheckmark(ship);
+    renderHUD();
+
+    if (lr.progress >= lr.req.count) {
+      clearLaneReq(laneIdx);
     } else {
-      renderCustoms();
+      renderCustomsBooths();
     }
   } else {
-    rejectShip(ship, laneIdx);
+    // Empty ship → pass freely, no penalty
+    if (avatarsOnShip.length === 0) return;
+    // Wrong cargo — fly back up + time penalty
+    rejectShip(ship);
   }
 }
 
-function rejectShip(ship, laneIdx) {
-  // Animate cargo flying upward first
+function clearLaneReq(laneIdx) {
+  G.clearedReqs++;
+  showToast(`✅ Lane ${laneIdx + 1} complete! +${G.laneReqs[laneIdx].req.count}`, 'success');
+
+  // Pull next requirement from queue
+  const next = G.customsQueue.shift() || null;
+  G.laneReqs[laneIdx] = next ? { req: next, progress: 0 } : null;
+  if (next) refillPoolFromReq(next);
+
+  renderCustomsBooths();
+
+  // Check if ALL reqs cleared
+  if (G.clearedReqs >= G.totalReqs) {
+    setTimeout(() => endGame(true), 500);
+  }
+}
+
+function rejectShip(ship) {
+  // Penalty: -5 seconds
+  G.timeLeft = Math.max(0, G.timeLeft - 5);
+  showTimePenalty(ship);
+
+  // Fly each cargo card to top-left corner of screen
   ship.slots.forEach((avt, si) => {
     if (!avt) return;
     const card = document.getElementById('avt-' + avt._instanceId);
-    if (card) card.classList.add('flying-up');
+    if (!card) return;
+
+    const rect = card.getBoundingClientRect();
+
+    // Create a flying clone attached to body
+    const clone = document.createElement('div');
+    clone.style.cssText = `
+      position:fixed; left:${rect.left}px; top:${rect.top}px;
+      width:${rect.width}px; height:${rect.height}px;
+      border-radius:10px; overflow:hidden;
+      pointer-events:none; z-index:9998;
+      transition: left 0.55s cubic-bezier(.4,0,.2,1),
+                  top  0.55s cubic-bezier(.4,0,.2,1),
+                  opacity 0.2s ease 0.4s,
+                  transform 0.55s ease;
+    `;
+    clone.innerHTML = card.outerHTML;
+    document.body.appendChild(clone);
+
+    // Hide original card immediately
+    card.style.opacity = '0';
+
+    // Trigger fly: to top-left corner with slight stagger per slot
+    const delay = si * 60;
+    setTimeout(() => {
+      clone.style.left      = '16px';
+      clone.style.top       = '16px';
+      clone.style.transform = 'scale(0.35) rotate(-15deg)';
+      clone.style.opacity   = '0';
+    }, delay + 20);
+
+    setTimeout(() => clone.remove(), delay + 650);
   });
 
-  // After animation: return cargo to pool, lose life
+  // After animation: return cargo to pool, clear ship
   setTimeout(() => {
     ship.slots.forEach(avt => returnToPool(avt));
     ship.slots = ship.slots.map(() => null);
     updateShipSlotDOM(ship);
-    loseLife();
     markShipRejected(ship);
-  }, 420);
+  }, 480);
 }
 
-function showCheckmark(ship) {
+function showTimePenalty(ship) {
   const el = document.getElementById('ship-' + ship.id);
-  if (!el) return;
-  const check = document.createElement('div');
-  check.className = 'ship-checkmark';
-  check.textContent = '✅';
-  // position relative to ship-body
-  const body = el.querySelector('.ship-body');
-  if (body) {
-    body.style.position = 'relative';
-    body.appendChild(check);
-    setTimeout(() => check.remove(), 1200);
-  }
+  const ref = el || document.getElementById('game-root');
+  const rect = ref ? ref.getBoundingClientRect() : { left: window.innerWidth/2, top: window.innerHeight/2 };
+
+  const txt = document.createElement('div');
+  txt.textContent = '-5s';
+  txt.style.cssText = `
+    position: fixed;
+    left: ${rect.left + rect.width / 2}px;
+    top:  ${rect.top  + (rect.height || 0) * 0.3}px;
+    transform: translate(-50%, 0);
+    font-family: 'Nunito', sans-serif;
+    font-size: 28px; font-weight: 900;
+    color: #ef4444;
+    text-shadow: 0 2px 8px rgba(0,0,0,0.5);
+    pointer-events: none; z-index: 9997;
+    animation: penaltyFloat 0.9s ease forwards;
+  `;
+  document.body.appendChild(txt);
+  setTimeout(() => txt.remove(), 950);
 }
 
+// ============================================================
+// REAL-TIME HIGHLIGHTS
+// ============================================================
 function updateShipHighlights() {
   G.lanes.forEach((lane, laneIdx) => {
-    const customsState = G.customs[laneIdx];
-    const correctSet = customsState && !customsState.done
-      ? new Set(G.level.customs[laneIdx].correctAvatars || [])
-      : null;
-
+    const correctSet = getLaneCorrectSet(laneIdx);
     lane.ships.forEach(ship => {
       if (ship.checked) return;
       const el = document.getElementById('ship-' + ship.id);
       if (!el) return;
-
       el.classList.remove('valid', 'invalid');
-      if (!correctSet) return;
-
-      const avatarsOnShip = ship.slots.filter(Boolean);
-      if (avatarsOnShip.length === 0) return;
-
-      const allCorrect = avatarsOnShip.every(a => correctSet.has(a.id));
-      el.classList.add(allCorrect ? 'valid' : 'invalid');
+      const avts = ship.slots.filter(Boolean);
+      if (!avts.length || !G.laneReqs[laneIdx]) return;
+      const ok = avts.every(a => correctSet.has(a.id));
+      el.classList.add(ok ? 'valid' : 'invalid');
     });
   });
 }
 
 // ============================================================
-// LIVES
+// GAME END
 // ============================================================
-function loseLife() {
-  G.lives = Math.max(0, G.lives - 1);
-  renderHUD();
-  if (G.lives === 0) {
-    setTimeout(() => gameOver(), 500);
+function endGame(won) {
+  G.running = false;
+  const total = G.totalReqs;
+  const cleared = G.clearedReqs;
+  const overlay = document.getElementById('overlay');
+  const card    = document.getElementById('overlay-card');
+  overlay.classList.remove('hidden');
+
+  if (won) {
+    card.innerHTML = `
+      <h1>🎉 Complete!</h1>
+      <p>All ${total} orders delivered!<br>Score: <strong>${G.score}</strong> items</p>
+      <button class="btn btn-success" onclick="showLevelSelect()">Back to Levels</button>`;
+  } else {
+    card.innerHTML = `
+      <h1>⏰ Time's Up!</h1>
+      <p>Cleared <strong>${cleared}/${total}</strong> orders<br>Score: <strong>${G.score}</strong> items</p>
+      <button class="btn btn-primary" onclick="location.reload()">Try Again</button>
+      &nbsp;
+      <button class="btn btn-outline" style="border:2px solid #cbd5e1" onclick="showLevelSelect()">Levels</button>`;
   }
 }
 
-function gameOver() {
+function showLevelSelect() {
+  document.getElementById('overlay').classList.add('hidden');
+  document.getElementById('level-select').classList.remove('hidden');
   G.running = false;
-  showOverlay('game-over');
 }
 
-function checkLevelComplete() {
-  if (G.customs.every(c => c.done)) {
-    G.running = false;
-    setTimeout(() => showOverlay('level-complete'), 600);
+// ============================================================
+// DOM: BUILD LAYOUT
+// ============================================================
+function buildDOM() {
+  document.getElementById('lanes-container').innerHTML = '';
+  const lanesContainer = document.getElementById('lanes-container');
+  const laneCount = G.level.laneCount;
+
+  const customsBar = document.getElementById('customs-bar');
+  customsBar.style.top = (56 + getCustomsY()) + 'px';
+
+  for (let i = 0; i < laneCount; i++) {
+    const laneEl = document.createElement('div');
+    laneEl.className = 'lane';
+    laneEl.id = 'lane-' + i;
+    lanesContainer.appendChild(laneEl);
   }
 }
 
@@ -383,8 +506,7 @@ function createShipDOM(ship, laneIdx) {
   el.className = 'ship';
   el.id = 'ship-' + ship.id;
   el.dataset.shipId = ship.id;
-  el.dataset.laneIdx = laneIdx;
-  el.style.top = ship.y + 'px';
+  el.style.top  = ship.y + 'px';
   el.style.left = '50%';
   el.style.transform = 'translateX(-50%)';
 
@@ -395,40 +517,36 @@ function createShipDOM(ship, laneIdx) {
         ${ship.slots.map((avt, si) => createSlotHTML(ship, si, avt)).join('')}
       </div>
     </div>
-    <div class="ship-stern"></div>
-  `;
+    <div class="ship-stern"></div>`;
 
   laneEl.appendChild(el);
   attachSlotEvents(ship);
 }
 
 function createSlotHTML(ship, slotIdx, avt) {
-  const isEmpty = !avt;
-  return `
-    <div class="cargo-slot ${isEmpty ? 'empty' : ''}"
-         id="slot-${ship.id}-${slotIdx}"
-         data-ship-id="${ship.id}"
-         data-slot-idx="${slotIdx}">
-      ${avt ? createAvatarHTML(avt, ship.id, slotIdx) : ''}
-    </div>`;
+  return `<div class="cargo-slot ${!avt ? 'empty' : ''}"
+       id="slot-${ship.id}-${slotIdx}"
+       data-ship-id="${ship.id}"
+       data-slot-idx="${slotIdx}">
+    ${avt ? createAvatarHTML(avt, ship.id, slotIdx) : ''}
+  </div>`;
 }
 
 function createAvatarHTML(avt, shipId, slotIdx) {
-  const imgUrl = avt.imageUrl || (AVATAR_BASE_URL + avt.file);
-  return `
-    <div class="avatar-card"
-         id="avt-${avt._instanceId}"
-         data-ship-id="${shipId}"
-         data-slot-idx="${slotIdx}"
-         data-avt-id="${avt.id}"
-         data-instance-id="${avt._instanceId}">
-      <img src="${imgUrl}" alt="${avt.id}" loading="lazy" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%2280%22 height=%2280%22><rect width=%2280%22 height=%2280%22 fill=%22%23ddd%22/><text x=%2240%22 y=%2245%22 text-anchor=%22middle%22 font-size=%228%22>${avt.id}</text></svg>'">
-    </div>`;
+  const src = AVATAR_BASE_URL + avt.file;
+  return `<div class="avatar-card"
+       id="avt-${avt._instanceId}"
+       data-ship-id="${shipId}"
+       data-slot-idx="${slotIdx}"
+       data-avt-id="${avt.id}"
+       data-instance-id="${avt._instanceId}">
+    <img src="${src}" alt="${avt.id}" loading="lazy"
+         onerror="this.parentElement.style.background='#ddd'">
+  </div>`;
 }
 
 function removeShipDOM(ship) {
-  const el = document.getElementById('ship-' + ship.id);
-  if (el) el.remove();
+  document.getElementById('ship-' + ship.id)?.remove();
 }
 
 function updateShipSlotDOM(ship) {
@@ -451,9 +569,18 @@ function markShipRejected(ship) {
   setTimeout(() => el.classList.remove('rejected'), 500);
 }
 
-// ============================================================
-// DOM: RENDER LOOP (positions)
-// ============================================================
+function showCheckmark(ship) {
+  const el = document.getElementById('ship-' + ship.id);
+  if (!el) return;
+  const body = el.querySelector('.ship-body');
+  if (!body) return;
+  const check = document.createElement('div');
+  check.className = 'ship-checkmark';
+  check.textContent = '✅';
+  body.appendChild(check);
+  setTimeout(() => check.remove(), 1200);
+}
+
 function renderShips() {
   G.lanes.forEach(lane => {
     lane.ships.forEach(ship => {
@@ -467,87 +594,51 @@ function renderShips() {
 // DOM: HUD
 // ============================================================
 function renderHUD() {
-  const heartsEl = document.getElementById('hearts-display');
-  if (heartsEl) {
-    heartsEl.innerHTML = '';
-    for (let i = 0; i < 3; i++) {
-      const span = document.createElement('span');
-      span.className = 'heart';
-      span.id = 'heart-' + i;
-      span.textContent = i < G.lives ? '❤️' : '🖤';
-      heartsEl.appendChild(span);
-    }
-  }
   const scoreEl = document.getElementById('score-display');
   if (scoreEl) scoreEl.textContent = '📦 ' + G.score;
+
+  // Progress: reqs cleared
+  const progressEl = document.getElementById('progress-display');
+  if (progressEl) progressEl.textContent = `✅ ${G.clearedReqs}/${G.totalReqs}`;
+}
+
+function renderTimerHUD() {
+  const timerEl = document.getElementById('timer-display');
+  if (!timerEl) return;
+  const mins = Math.floor(G.timeLeft / 60);
+  const secs = Math.floor(G.timeLeft % 60);
+  timerEl.textContent = `⏱ ${mins}:${secs.toString().padStart(2, '0')}`;
+  // Urgent pulse when < 10s
+  timerEl.classList.toggle('timer-urgent', G.timeLeft < 10);
 }
 
 // ============================================================
-// DOM: CUSTOMS
+// DOM: CUSTOMS BOOTHS
 // ============================================================
-function renderCustoms() {
+function renderCustomsBooths() {
   const container = document.getElementById('customs-booths');
   if (!container) return;
-
   container.innerHTML = '';
-  G.level.customs.forEach((cCfg, i) => {
-    const state = G.customs[i];
-    const phase = cCfg.phases[state.phaseIdx] || {};
-    const count = phase.count || 0;
-    const done  = state.done;
 
+  G.laneReqs.forEach((lr, i) => {
     const booth = document.createElement('div');
-    booth.className = 'customs-booth' + (done ? ' completed' : '');
+    booth.className = 'customs-booth' + (!lr ? ' completed' : '');
     booth.id = 'booth-' + i;
 
-    let hintHTML = '';
-    if (cCfg.displayHint) {
-      (cCfg.displayHint.required || []).forEach(t => {
-        hintHTML += `<span class="tag-badge required">${t}</span>`;
-      });
-      (cCfg.displayHint.banned || []).forEach(t => {
-        hintHTML += `<span class="tag-badge banned">🚫${t}</span>`;
-      });
+    if (!lr) {
+      booth.innerHTML = `<div class="booth-label">Lane ${i+1}</div><div style="font-size:22px">✅</div><div class="booth-progress">Done</div>`;
+    } else {
+      const hint = lr.req.displayHint || {};
+      const reqTags = (hint.required || []).map(t => `<span class="tag-badge required">${t}</span>`).join('');
+      const banTags = (hint.banned   || []).map(t => `<span class="tag-badge banned">🚫${t}</span>`).join('');
+      const pct = Math.min(100, Math.round(lr.progress / lr.req.count * 100));
+      booth.innerHTML = `
+        <div class="booth-label">Lane ${i+1}</div>
+        <div class="booth-hint">${reqTags}${banTags}</div>
+        <div class="booth-progress">${lr.progress}/${lr.req.count}</div>
+        <div class="booth-bar"><div class="booth-bar-fill" style="width:${pct}%"></div></div>`;
     }
-
-    booth.innerHTML = done
-      ? `<div class="booth-label">Lane ${i + 1}</div><div style="font-size:24px">✅</div><div class="booth-progress">Done!</div>`
-      : `<div class="booth-label">Lane ${i + 1}</div>
-         <div class="booth-hint">${hintHTML}</div>
-         <div class="booth-progress">${state.count} / ${count}</div>`;
-
     container.appendChild(booth);
-  });
-}
-
-// ============================================================
-// DOM: BUILD MAIN LAYOUT
-// ============================================================
-function buildDOM() {
-  const root = document.getElementById('game-root');
-
-  // Clear previous game state
-  document.getElementById('lanes-container').innerHTML = '';
-
-  const lanesContainer = document.getElementById('lanes-container');
-  const laneCount = G.level.laneCount;
-
-  // Calculate customs bar position
-  const customsY = getCustomsY();
-  const customsBar = document.getElementById('customs-bar');
-  customsBar.style.top = (56 + customsY) + 'px';
-
-  // Build lanes
-  for (let i = 0; i < laneCount; i++) {
-    const laneEl = document.createElement('div');
-    laneEl.className = 'lane';
-    laneEl.id = 'lane-' + i;
-    lanesContainer.appendChild(laneEl);
-  }
-
-  // Reset spawn timers (stagger slightly)
-  G.lanes.forEach((lane, i) => {
-    lane.spawnTimer = i * 0.5; // stagger first spawns
   });
 }
 
@@ -571,29 +662,23 @@ function onDragStart(e, shipId, slotIdx) {
   e.preventDefault();
   const ship = findShipById(shipId);
   if (!ship) return;
-  const avt = ship.slots[slotIdx];
-  if (!avt) return;
+  const avt  = ship.slots[slotIdx];
+  if (!avt)  return;
 
-  G.drag.active      = true;
-  G.drag.avatarId    = avt._instanceId;
-  G.drag.srcShipIdx  = findShipIdxById(shipId);
-  G.drag.srcSlot     = { shipId, slotIdx };
-  G.drag.overShipIdx = null;
+  G.drag.active     = true;
+  G.drag.srcSlot    = { shipId, slotIdx };
+  G.drag.srcShipIdx = findShipIdxById(shipId);
+  G.drag.overShipId = null;
   G.drag.overSlotIdx = null;
 
-  // Show ghost
   const ghost = document.createElement('div');
   ghost.id = 'drag-ghost';
-  ghost.innerHTML = `<img src="${avt.imageUrl || (AVATAR_BASE_URL + avt.file)}" loading="lazy">`;
+  ghost.innerHTML = `<img src="${AVATAR_BASE_URL + avt.file}" loading="lazy">`;
   document.body.appendChild(ghost);
   G.drag.ghostEl = ghost;
   moveDragGhost(e.clientX, e.clientY);
 
-  // Dim source card
-  const card = document.getElementById('avt-' + avt._instanceId);
-  if (card) card.classList.add('dragging');
-
-  // Listen globally
+  document.getElementById('avt-' + avt._instanceId)?.classList.add('dragging');
   window.addEventListener('pointermove', onDragMove);
   window.addEventListener('pointerup',   onDragEnd);
 }
@@ -612,37 +697,25 @@ function moveDragGhost(x, y) {
 }
 
 function checkHoverTarget(x, y) {
-  // Clear previous highlight
   clearDragHighlight();
-
-  // Find element under cursor (skip ghost)
   if (G.drag.ghostEl) G.drag.ghostEl.style.display = 'none';
   const el = document.elementFromPoint(x, y);
   if (G.drag.ghostEl) G.drag.ghostEl.style.display = '';
-
   if (!el) return;
 
-  // Find avatar-card or cargo-slot
   const card = el.closest('.avatar-card');
   const slot = el.closest('.cargo-slot');
+  const target = card || slot;
+  if (!target) return;
 
-  if (card) {
-    const targetShipId  = parseInt(card.dataset.shipId);
-    const targetSlotIdx = parseInt(card.dataset.slotIdx);
-    if (targetShipId !== G.drag.srcSlot.shipId || targetSlotIdx !== G.drag.srcSlot.slotIdx) {
-      card.classList.add('swap-target');
-      G.drag.overShipId  = targetShipId;
-      G.drag.overSlotIdx = targetSlotIdx;
-    }
-  } else if (slot) {
-    const targetShipId  = parseInt(slot.dataset.shipId);
-    const targetSlotIdx = parseInt(slot.dataset.slotIdx);
-    if (targetShipId !== G.drag.srcSlot.shipId || targetSlotIdx !== G.drag.srcSlot.slotIdx) {
-      slot.classList.add('swap-target');
-      G.drag.overShipId  = targetShipId;
-      G.drag.overSlotIdx = targetSlotIdx;
-    }
-  }
+  const tShipId  = parseInt(target.dataset.shipId);
+  const tSlotIdx = parseInt(target.dataset.slotIdx);
+  if (isNaN(tShipId) || isNaN(tSlotIdx)) return;
+  if (tShipId === G.drag.srcSlot.shipId && tSlotIdx === G.drag.srcSlot.slotIdx) return;
+
+  target.classList.add('swap-target');
+  G.drag.overShipId  = tShipId;
+  G.drag.overSlotIdx = tSlotIdx;
 }
 
 function clearDragHighlight() {
@@ -653,62 +726,42 @@ function onDragEnd(e) {
   if (!G.drag.active) return;
   window.removeEventListener('pointermove', onDragMove);
   window.removeEventListener('pointerup',   onDragEnd);
-
   clearDragHighlight();
-
-  // Remove ghost
-  if (G.drag.ghostEl) { G.drag.ghostEl.remove(); G.drag.ghostEl = null; }
+  G.drag.ghostEl?.remove(); G.drag.ghostEl = null;
 
   // Un-dim source
   const srcShip = findShipByIdx(G.drag.srcShipIdx);
-  const srcAvt  = srcShip && srcShip.slots[G.drag.srcSlot.slotIdx];
-  if (srcAvt) {
-    const card = document.getElementById('avt-' + srcAvt._instanceId);
-    if (card) card.classList.remove('dragging');
+  const srcAvt  = srcShip?.slots[G.drag.srcSlot.slotIdx];
+  if (srcAvt) document.getElementById('avt-' + srcAvt._instanceId)?.classList.remove('dragging');
+
+  if (G.drag.overShipId != null) {
+    doSwap(G.drag.srcSlot.shipId, G.drag.srcSlot.slotIdx, G.drag.overShipId, G.drag.overSlotIdx);
   }
 
-  // Perform swap if valid target
-  if (G.drag.overShipId !== undefined && G.drag.overShipId !== null) {
-    doSwap(
-      G.drag.srcSlot.shipId,  G.drag.srcSlot.slotIdx,
-      G.drag.overShipId,      G.drag.overSlotIdx
-    );
-  }
-
-  G.drag.active      = false;
-  G.drag.overShipId  = null;
-  G.drag.overSlotIdx = null;
+  G.drag.active = false;
+  G.drag.overShipId = null;
 }
 
-function doSwap(shipIdA, slotIdxA, shipIdB, slotIdxB) {
-  if (shipIdA === shipIdB && slotIdxA === slotIdxB) return;
-
-  const shipA = findShipById(shipIdA);
-  const shipB = findShipById(shipIdB);
-  if (!shipA || !shipB) return;
-  if (shipA.checked || shipB.checked) return; // Can't move cargo on ships that already passed
-
-  // Swap
-  const tmp           = shipA.slots[slotIdxA];
-  shipA.slots[slotIdxA] = shipB.slots[slotIdxB];
-  shipB.slots[slotIdxB] = tmp;
-
-  // Update DOM
-  updateShipSlotDOM(shipA);
-  updateShipSlotDOM(shipB);
+function doSwap(shipIdA, slotA, shipIdB, slotB) {
+  if (shipIdA === shipIdB && slotA === slotB) return;
+  const sA = findShipById(shipIdA);
+  const sB = findShipById(shipIdB);
+  if (!sA || !sB || sA.checked || sB.checked) return;
+  [sA.slots[slotA], sB.slots[slotB]] = [sB.slots[slotB], sA.slots[slotA]];
+  updateShipSlotDOM(sA);
+  updateShipSlotDOM(sB);
 }
 
 // ============================================================
 // HELPERS
 // ============================================================
-function findShipById(shipId) {
+function findShipById(id) {
   for (const lane of G.lanes) {
-    const s = lane.ships.find(s => s.id === shipId);
+    const s = lane.ships.find(s => s.id === id);
     if (s) return s;
   }
   return null;
 }
-
 function findShipIdxById(shipId) {
   for (let li = 0; li < G.lanes.length; li++) {
     const si = G.lanes[li].ships.findIndex(s => s.id === shipId);
@@ -716,12 +769,10 @@ function findShipIdxById(shipId) {
   }
   return null;
 }
-
 function findShipByIdx(ref) {
   if (!ref) return null;
   return G.lanes[ref.laneIdx]?.ships[ref.shipIdx] || null;
 }
-
 function shuffle(arr) {
   const a = [...arr];
   for (let i = a.length - 1; i > 0; i--) {
@@ -732,42 +783,14 @@ function shuffle(arr) {
 }
 
 // ============================================================
-// TOAST NOTIFICATIONS
+// TOASTS
 // ============================================================
 function showToast(msg, type = '') {
-  const container = document.getElementById('toast-container');
+  const c = document.getElementById('toast-container');
+  if (!c) return;
   const el = document.createElement('div');
   el.className = 'toast ' + type;
   el.textContent = msg;
-  container.appendChild(el);
+  c.appendChild(el);
   setTimeout(() => el.remove(), 1800);
-}
-
-// ============================================================
-// OVERLAY (Game Over / Level Complete)
-// ============================================================
-function showOverlay(type) {
-  const overlay = document.getElementById('overlay');
-  const card    = document.getElementById('overlay-card');
-  overlay.classList.remove('hidden');
-
-  if (type === 'game-over') {
-    card.innerHTML = `
-      <h1>💀 Game Over</h1>
-      <p>Score: ${G.score} items delivered</p>
-      <button class="btn btn-primary" onclick="location.reload()">Try Again</button>
-      &nbsp;
-      <button class="btn btn-danger" onclick="showLevelSelect()">Levels</button>`;
-  } else {
-    card.innerHTML = `
-      <h1>🎉 Level Clear!</h1>
-      <p>Score: ${G.score} items delivered<br>Lives remaining: ${'❤️'.repeat(G.lives)}</p>
-      <button class="btn btn-success" onclick="showLevelSelect()">Back to Levels</button>`;
-  }
-}
-
-function showLevelSelect() {
-  document.getElementById('overlay').classList.add('hidden');
-  document.getElementById('level-select').classList.remove('hidden');
-  G.running = false;
 }

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Customs Cargo 🚢</title>
+  <title>Cargo Sort 🚢</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="./css/style.css">
@@ -22,9 +22,12 @@
 
   <!-- HUD -->
   <div id="hud">
-    <div id="hearts-display"></div>
-    <div id="game-title">🚢 CUSTOMS CARGO</div>
-    <div id="score-display">📦 0</div>
+    <div id="timer-display">⏱ 2:00</div>
+    <div id="game-title">🚢 CARGO SORT</div>
+    <div style="display:flex;gap:14px;align-items:center">
+      <div id="progress-display">✅ 0/0</div>
+      <div id="score-display">📦 0</div>
+    </div>
   </div>
 
   <!-- Lanes (ships rendered here) -->
@@ -46,10 +49,8 @@
 
   <!-- ==================== LEVEL SELECT ==================== -->
   <div id="level-select">
-    <h1>🚢 Customs Cargo</h1>
-    <p style="color:rgba(255,255,255,0.8);font-size:15px;text-align:center;max-width:400px">
-      Sort the cargo ships before they reach customs!<br>Drag &amp; drop cargo between ships to satisfy each checkpoint.
-    </p>
+    <h1>🚢 Cargo Sort</h1>
+    <p>Sort the cargo ships before they reach customs!<br>Drag &amp; drop cargo between ships to satisfy each lane.</p>
 
     <div class="level-grid" id="level-grid">
       <!-- filled by JS -->
@@ -61,7 +62,7 @@
   <!-- ==================== FTUE POPUP ==================== -->
   <div id="ftue-overlay" class="hidden">
     <div class="ftue-card">
-      <h2>🚢 Customs Cargo</h2>
+      <h2>🚢 Cargo Sort</h2>
       <p class="ftue-subtitle">Sort the cargo before it reaches the checkpoint!</p>
       <div class="ftue-rules">
         <div class="ftue-rule">
@@ -100,96 +101,64 @@ const BUILTIN_LEVELS = [
     id: 'demo_1',
     name: '🟢 Tutorial',
     laneCount: 2,
+    timeLimit: 90,
     lanes: [
-      { spawnInterval: 5, shipSpeed: 60, slotCount: 1, phases: [] },
-      { spawnInterval: 5, shipSpeed: 60, slotCount: 1, phases: [] },
+      { spawnInterval: 4, shipSpeed: 60, slotCount: 1, phases: [] },
+      { spawnInterval: 4, shipSpeed: 60, slotCount: 1, phases: [] },
     ],
-    customs: [
-      {
-        laneIndex: 0,
-        correctAvatars: [],   // filled after avatars load
-        _correctTags: ['Happy'],   // used to auto-fill demo
-        displayHint: { required: ['Happy'], banned: [] },
-        phases: [{ count: 3 }],
-      },
-      {
-        laneIndex: 1,
-        correctAvatars: [],
-        _correctTags: ['Angry'],
-        displayHint: { required: ['Angry'], banned: [] },
-        phases: [{ count: 3 }],
-      },
+    // customsPool: 4 requirements total for 2 lanes (cycles when cleared)
+    customsPool: [
+      { id:'d1_r1', correctAvatars:[], _tags:['Happy'], displayHint:{required:['Happy'],banned:[]}, count:4 },
+      { id:'d1_r2', correctAvatars:[], _tags:['Angry'], displayHint:{required:['Angry'],banned:[]}, count:4 },
+      { id:'d1_r3', correctAvatars:[], _tags:['Sad'],   displayHint:{required:['Sad'],  banned:[]}, count:4 },
+      { id:'d1_r4', correctAvatars:[], _tags:['Happy'], displayHint:{required:['Happy'],banned:[]}, count:4 },
     ],
   },
   {
     id: 'demo_2',
     name: '🟡 Two Lanes',
     laneCount: 2,
+    timeLimit: 120,
     lanes: [
-      { spawnInterval: 4, shipSpeed: 55, slotCount: 2, phases: [] },
-      { spawnInterval: 4, shipSpeed: 55, slotCount: 2, phases: [] },
+      { spawnInterval: 3.5, shipSpeed: 60, slotCount: 2, phases: [] },
+      { spawnInterval: 3.5, shipSpeed: 60, slotCount: 2, phases: [] },
     ],
-    customs: [
-      {
-        laneIndex: 0,
-        correctAvatars: [],
-        _correctTags: ['Woman'],
-        displayHint: { required: ['Woman'], banned: [] },
-        phases: [{ count: 4 }],
-      },
-      {
-        laneIndex: 1,
-        correctAvatars: [],
-        _correctTags: ['Man'],
-        displayHint: { required: ['Man'], banned: ['Old'] },
-        phases: [{ count: 4 }],
-      },
+    customsPool: [
+      { id:'d2_r1', correctAvatars:[], _tags:['Woman'],  displayHint:{required:['Woman'], banned:[]},    count:5 },
+      { id:'d2_r2', correctAvatars:[], _tags:['Man'],    displayHint:{required:['Man'],   banned:['Old']},count:5 },
+      { id:'d2_r3', correctAvatars:[], _tags:['Happy'],  displayHint:{required:['Happy'], banned:[]},    count:4 },
+      { id:'d2_r4', correctAvatars:[], _tags:['Glasses'],displayHint:{required:['Glasses'],banned:[]},   count:4 },
     ],
   },
   {
     id: 'demo_3',
     name: '🔴 Three Lanes',
     laneCount: 3,
+    timeLimit: 150,
     lanes: [
-      { spawnInterval: 3.5, shipSpeed: 65, slotCount: 2, phases: [{ startTime: 20, spawnInterval: 2.5, shipSpeed: 80 }] },
-      { spawnInterval: 3.5, shipSpeed: 65, slotCount: 2, phases: [{ startTime: 20, spawnInterval: 2.5, shipSpeed: 80 }] },
-      { spawnInterval: 3.5, shipSpeed: 65, slotCount: 2, phases: [{ startTime: 20, spawnInterval: 2.5, shipSpeed: 80 }] },
+      { spawnInterval: 3, shipSpeed: 65, slotCount: 2, phases: [{ startTime:30, spawnInterval:2, shipSpeed:80 }] },
+      { spawnInterval: 3, shipSpeed: 65, slotCount: 2, phases: [{ startTime:30, spawnInterval:2, shipSpeed:80 }] },
+      { spawnInterval: 3, shipSpeed: 65, slotCount: 2, phases: [{ startTime:30, spawnInterval:2, shipSpeed:80 }] },
     ],
-    customs: [
-      {
-        laneIndex: 0,
-        correctAvatars: [],
-        _correctTags: ['Happy'],
-        displayHint: { required: ['Happy'], banned: [] },
-        phases: [{ count: 4 }, { count: 4 }],
-      },
-      {
-        laneIndex: 1,
-        correctAvatars: [],
-        _correctTags: ['Sad'],
-        displayHint: { required: ['Sad'], banned: [] },
-        phases: [{ count: 4 }],
-      },
-      {
-        laneIndex: 2,
-        correctAvatars: [],
-        _correctTags: ['Angry'],
-        displayHint: { required: ['Angry'], banned: [] },
-        phases: [{ count: 4 }],
-      },
+    customsPool: [
+      { id:'d3_r1', correctAvatars:[], _tags:['Happy'],  displayHint:{required:['Happy'],  banned:[]}, count:4 },
+      { id:'d3_r2', correctAvatars:[], _tags:['Sad'],    displayHint:{required:['Sad'],    banned:[]}, count:4 },
+      { id:'d3_r3', correctAvatars:[], _tags:['Angry'],  displayHint:{required:['Angry'],  banned:[]}, count:4 },
+      { id:'d3_r4', correctAvatars:[], _tags:['Woman'],  displayHint:{required:['Woman'],  banned:[]}, count:4 },
+      { id:'d3_r5', correctAvatars:[], _tags:['Man'],    displayHint:{required:['Man'],    banned:[]}, count:4 },
+      { id:'d3_r6', correctAvatars:[], _tags:['Glasses'],displayHint:{required:['Glasses'],banned:[]}, count:3 },
     ],
   },
 ];
 
-// Auto-fill demo level correctAvatars once avatars are loaded
+// Auto-fill demo level correctAvatars from _tags once avatars are loaded
 function autoFillDemoLevels() {
   BUILTIN_LEVELS.forEach(level => {
-    level.customs.forEach(c => {
-      if (c._correctTags && c.correctAvatars.length === 0) {
-        const needed = c.phases.reduce((s, p) => s + p.count, 0) * 2; // 2x buffer
-        c.correctAvatars = AVATARS
-          .filter(a => c._correctTags.every(t => a.tags.includes(t)))
-          .slice(0, Math.min(needed, 12))
+    (level.customsPool || []).forEach(req => {
+      if (req._tags && !req.correctAvatars.length) {
+        req.correctAvatars = AVATARS
+          .filter(a => req._tags.every(t => a.tags.includes(t)))
+          .slice(0, req.count * 2)
           .map(a => a.id);
       }
     });
@@ -217,11 +186,16 @@ function getSavedLevels() {
 function renderLevelSelect() {
   const grid = document.getElementById('level-grid');
   const levels = getAllLevels();
-  grid.innerHTML = levels.map(lvl => `
-    <div class="level-card" onclick="pickLevel('${lvl.id}')">
+  grid.innerHTML = levels.map(lvl => {
+    const reqs = (lvl.customsPool || []).length;
+    const t    = lvl.timeLimit || 120;
+    const mins = Math.floor(t/60), secs = t%60;
+    const timeStr = mins > 0 ? `${mins}:${String(secs).padStart(2,'0')}` : `${secs}s`;
+    return `<div class="level-card" onclick="pickLevel('${lvl.id}')">
       <div class="level-name">${lvl.name}</div>
-      <div class="level-meta">${lvl.laneCount} lanes</div>
-    </div>`).join('');
+      <div class="level-meta">${lvl.laneCount} lanes · ${reqs} orders · ⏱${timeStr}</div>
+    </div>`;
+  }).join('');
 }
 
 function pickLevel(id) {

@@ -212,7 +212,7 @@
 
 <!-- HEADER -->
 <header>
-  <h1>🛃 Customs Cargo — Level Editor</h1>
+  <h1>🚢 Cargo Sort — Level Editor</h1>
   <div class="header-actions">
     <a href="index.html" class="btn btn-outline" style="text-decoration:none">🎮 Play</a>
     <button class="btn btn-outline" onclick="importLevel()">📂 Import</button>
@@ -256,6 +256,11 @@
             <option value="4">4 Lanes</option>
           </select>
         </div>
+        <div class="field-row">
+          <label>Time Limit (seconds)</label>
+          <input type="number" id="time-limit" min="30" step="10" value="120"
+                 onchange="E.level.timeLimit = +this.value">
+        </div>
       </div>
 
       <div class="config-card">
@@ -272,11 +277,7 @@
 
     <!-- TAB: CUSTOMS -->
     <div id="tab-customs" class="tab-panel hidden">
-      <h2 style="margin-bottom:20px;font-size:20px">🛃 Customs Configuration</h2>
-      <p style="color:#64748b;font-size:14px;margin-bottom:16px">
-        Assign correct avatars per lane. Only those avatars will enter the shared spawn pool.
-        Ships passing customs must carry only avatars from that lane's correct list.
-      </p>
+      <h2 style="margin-bottom:20px;font-size:20px">🛃 Customs Pool</h2>
       <div id="customs-config"></div>
     </div>
 
